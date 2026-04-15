@@ -1,0 +1,97 @@
+{
+  "name": "db-predictor",
+  "displayName": "QueryGuard",
+  "description": "Real-time Database Safety Analyzer for Prisma, Supabase and Drizzle.",
+  "version": "1.1.1",
+  "publisher": "queryguard",
+  "icon": "assets/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/queryguard/db-predictor.git"
+  },
+  "homepage": "https://github.com/queryguard/db-predictor",
+  "bugs": {
+    "url": "https://github.com/queryguard/db-predictor/issues"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "database",
+    "safety",
+    "prisma",
+    "supabase",
+    "drizzle"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "QueryGuard",
+      "properties": {
+        "queryguard.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/Disable QueryGuard analysis."
+        },
+        "queryguard.showCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline code lens impact estimations."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "queryguard.connect",
+        "title": "QueryGuard: Connect to Database",
+        "icon": "$(database)"
+      },
+      {
+        "command": "queryguard.disconnect",
+        "title": "QueryGuard: Disconnect",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "queryguard.refreshSchema",
+        "title": "QueryGuard: Refresh Schema",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "queryguard.showImpactPanel",
+        "title": "QueryGuard: Show Impact Analysis",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "queryguard.simulate",
+        "title": "QueryGuard: Run Safe Simulation",
+        "icon": "$(zap)"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "node ./esbuild.js && cd webview-ui && npm run build",
+    "compile": "node ./esbuild.js",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "pg": "^8.11.3",
+    "pg-pool": "^3.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "18.x",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.19.8",
+    "typescript": "^5.3.2"
+  }
+}

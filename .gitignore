@@ -1,0 +1,28 @@
+# Dependencias
+node_modules/
+
+# Compilación y Empaquetado
+out/
+dist/
+*.vsix
+webview-ui/dist/
+webview-ui/node_modules/
+
+# Entorno y Secretos
+.env
+.env.local
+.env.*.local
+
+# VS Code testing e Historial
+.vscode-test/
+.history/
+*.log
+npm-debug.log*
+
+# Archivos de Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# TypeScript
+*.tsbuildinfo

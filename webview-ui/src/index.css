@@ -1,0 +1,69 @@
+:root {
+  --container-padding: 20px;
+}
+
+body {
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+#root {
+  padding: var(--container-padding);
+}
+
+.card {
+  background-color: var(--vscode-welcomePage-tileBackground);
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.title {
+  color: var(--vscode-editor-foreground);
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: var(--vscode-descriptionForeground);
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.error-text {
+  color: var(--vscode-errorForeground);
+}
+
+.warning-text {
+  color: var(--vscode-editorWarning-foreground);
+}
+
+.success-text {
+  color: var(--vscode-debugIcon-breakpointForeground);
+}
+
+.destructive-text {
+  color: var(--vscode-errorForeground);
+  font-weight: bold;
+}
+
+.flex-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+}
