@@ -1,11 +1,10 @@
-import * as vscode from 'vscode';
 import * as ts from 'typescript';
-import { MutationInfo, MutationDetector, MutationOperation } from './DetectorInterface';
+import { MutationInfo, MutationDetector, MutationOperation, DocumentLike } from './DetectorInterface';
 
 export class SupabaseDetector implements MutationDetector {
     private readonly TARGET_METHODS = ['delete', 'update'];
 
-    public detect(document: vscode.TextDocument): MutationInfo[] {
+    public detect(document: DocumentLike): MutationInfo[] {
         const sourceCode = document.getText();
         const sourceFile = ts.createSourceFile(
             document.fileName,
@@ -35,7 +34,7 @@ export class SupabaseDetector implements MutationDetector {
     }
 
     // Extraer mutaciones de cadenas de Supabase (.from().delete()...)
-    private extractSupabaseMutation(node: ts.CallExpression, document: vscode.TextDocument): MutationInfo | null {
+    private extractSupabaseMutation(node: ts.CallExpression, document: DocumentLike): MutationInfo | null {
         const chain = this.getCallChain(node);
 
         // Buscamos una cadena que tenga .from('tabla') y .delete() o .update()
@@ -66,7 +65,7 @@ export class SupabaseDetector implements MutationDetector {
             operation: (opCall.name === 'delete' ? 'deleteMany' : 'updateMany') as MutationOperation,
             hasWhere: queryParams.length > 0,
             queryParams,
-            range: new vscode.Range(start, end),
+            range: { start, end },
             sourceText: node.getText()
         };
     }
@@ -78,25 +77,27 @@ export class SupabaseDetector implements MutationDetector {
             if (f.name === 'eq' && f.args?.length >= 2) {
                 const col = ts.isStringLiteral(f.args[0]) ? f.args[0].text : f.args[0].getText();
                 const valNode = f.args[1];
-                let val: unknown = valNode.getText();
-                if (ts.isStringLiteral(valNode)) val = valNode.text;
-                if (ts.isNumericLiteral(valNode)) val = Number(valNode.text);
-                params.push({ column: col, value: val });
+                params.push({ column: col, value: this.parseValue(valNode) });
             }
             if (f.name === 'match' && f.args?.length >= 1 && ts.isObjectLiteralExpression(f.args[0])) {
                 f.args[0].properties.forEach(p => {
                     if (ts.isPropertyAssignment(p)) {
                         const name = ts.isStringLiteral(p.name) ? p.name.text : p.name.getText();
-                        const valNode = p.initializer;
-                        let val: unknown = valNode.getText();
-                        if (ts.isStringLiteral(valNode)) val = valNode.text;
-                        if (ts.isNumericLiteral(valNode)) val = Number(valNode.text);
-                        params.push({ column: name, value: val });
+                        params.push({ column: name, value: this.parseValue(p.initializer) });
                     }
                 });
             }
         });
         return params;
+    }
+
+    private parseValue(node: ts.Node): unknown {
+        if (ts.isStringLiteral(node)) return node.text;
+        if (ts.isNumericLiteral(node)) return Number(node.text);
+        if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
+        if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
+        if (node.kind === ts.SyntaxKind.NullKeyword) return null;
+        return node.getText();
     }
     private getCallChain(node: ts.CallExpression): { name: string, args: ts.NodeArray<ts.Expression> }[] {
         const chain: { name: string, args: ts.NodeArray<ts.Expression> }[] = [];

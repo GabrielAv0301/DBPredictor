@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { Logger } from './utils/logger';
 import { SecretsManager } from './config/SecretsManager';
 import { ConnectionManager } from './core/db/ConnectionManager';
@@ -23,7 +24,6 @@ export async function activate(context: vscode.ExtensionContext) {
     const connManager = ConnectionManager.getInstance();
 
     // Inyectar ruta absoluta del worker para evitar errores de resolución de módulos
-    const path = require('path');
     const workerPath = path.join(context.extensionPath, 'out', 'workers', 'db.worker.js');
     connManager.setWorkerPath(workerPath);
 

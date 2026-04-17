@@ -1,5 +1,5 @@
 import { parentPort } from 'worker_threads';
-import { Pool } from 'pg';
+import { Pool, PoolConfig } from 'pg';
 import { WorkerMessage, SqlParam } from '../core/db/types';
 
 let pool: Pool | null = null;
@@ -38,7 +38,7 @@ async function handleConnect(connectionString: string) {
                    connectionString.includes('127.0.0.1') || 
                    connectionString.includes('0.0.0.0');
 
-    const poolConfig: any = {
+    const poolConfig: PoolConfig = {
         connectionString,
         connectionTimeoutMillis: 10000, // Aumentamos el timeout a 10s para redes lentas
         idleTimeoutMillis: 10000,

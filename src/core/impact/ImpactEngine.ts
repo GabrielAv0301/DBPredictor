@@ -8,8 +8,8 @@ export class ImpactEngine {
         const tableStats = schema.tables.find(t => t.tableName === mutation.table);
         const totalRowsInTable = tableStats?.rowCount || 0;
         
-        let baseRowsAffected = 1; 
-        let estimationQuality: EstimationQuality = 'exact';
+        let baseRowsAffected: number; 
+        let estimationQuality: EstimationQuality;
 
         if (mutation.operation === 'deleteMany' || mutation.operation === 'updateMany') {
             if (mutation.hasWhere) {

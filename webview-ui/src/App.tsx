@@ -29,7 +29,6 @@ const App: React.FC = () => {
       case 'UPDATE_IMPACT':
         setImpact(lastMessage.data);
         setSimulationResult(null); // Reset simulation on new impact
-        setActiveTab('current');
         break;
       case 'UPDATE_HISTORY':
         setHistory(lastMessage.data);

@@ -1,12 +1,11 @@
-import * as vscode from 'vscode';
 import * as ts from 'typescript';
-import { MutationInfo, MutationDetector, MutationOperation } from './DetectorInterface';
+import { MutationInfo, MutationDetector, MutationOperation, DocumentLike } from './DetectorInterface';
 
 export class DrizzleDetector implements MutationDetector {
     private readonly TARGET_METHODS = ['delete', 'update'];
     private readonly TARGET_ALIASES = ['db', 'database', 'orm', 'client'];
 
-    public detect(document: vscode.TextDocument): MutationInfo[] {
+    public detect(document: DocumentLike): MutationInfo[] {
         const sourceCode = document.getText();
         const sourceFile = ts.createSourceFile(
             document.fileName,
@@ -36,7 +35,7 @@ export class DrizzleDetector implements MutationDetector {
     }
 
     // Extraer mutaciones de Drizzle ORM (db.delete(table)...)
-    private extractDrizzleMutation(node: ts.CallExpression, document: vscode.TextDocument): MutationInfo | null {
+    private extractDrizzleMutation(node: ts.CallExpression, document: DocumentLike): MutationInfo | null {
         const { chain, root } = this.getCallChain(node);
 
         // Soporte para múltiples alias de cliente (db, orm, etc)
@@ -50,7 +49,7 @@ export class DrizzleDetector implements MutationDetector {
         if (rootCall.args?.length === 0) return null;
         const tableArg = rootCall.args[0];
 
-        let tableName = 'unknown';
+        let tableName: string;
         if (ts.isIdentifier(tableArg)) {
             tableName = tableArg.text;
         } else if (ts.isPropertyAccessExpression(tableArg)) {
@@ -73,7 +72,7 @@ export class DrizzleDetector implements MutationDetector {
             operation,
             hasWhere,
             queryParams: [],
-            range: new vscode.Range(start, end),
+            range: { start, end },
             sourceText: node.getText()
         };
     }

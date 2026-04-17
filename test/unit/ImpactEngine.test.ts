@@ -2,7 +2,6 @@ import * as assert from 'assert';
 import { ImpactEngine } from '../../src/core/impact/ImpactEngine';
 import { MutationInfo } from '../../src/core/detectors/DetectorInterface';
 import { SchemaData } from '../../src/core/db/types';
-import * as vscode from 'vscode';
 
 describe('ImpactEngine Unit Tests', () => {
     const mockSchema: SchemaData = {
@@ -26,7 +25,7 @@ describe('ImpactEngine Unit Tests', () => {
             table: 'users',
             operation: 'deleteMany',
             hasWhere: false,
-            range: new vscode.Range(0, 0, 0, 0),
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
             sourceText: 'prisma.user.deleteMany({})'
         };
 
@@ -40,7 +39,7 @@ describe('ImpactEngine Unit Tests', () => {
             table: 'users',
             operation: 'deleteMany',
             hasWhere: true,
-            range: new vscode.Range(0, 0, 0, 0),
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
             sourceText: 'prisma.user.deleteMany({ where: { id: 1 } })'
         };
 
@@ -55,7 +54,7 @@ describe('ImpactEngine Unit Tests', () => {
             table: 'users',
             operation: 'delete',         // Single record
             hasWhere: true,
-            range: new vscode.Range(0, 0, 0, 0),
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
             sourceText: 'prisma.user.delete({ where: { id: 1 } })'
         };
 
@@ -81,7 +80,7 @@ describe('ImpactEngine Unit Tests', () => {
             table: 'users',
             operation: 'deleteMany',
             hasWhere: false,
-            range: new vscode.Range(0, 0, 0, 0),
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
             sourceText: 'prisma.user.deleteMany({})'
         };
 

@@ -2,7 +2,7 @@
   "name": "db-predictor",
   "displayName": "QueryGuard",
   "description": "Real-time Database Safety Analyzer for Prisma, Supabase and Drizzle.",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "publisher": "queryguard",
   "icon": "assets/icon.png",
   "engines": {
@@ -80,8 +80,10 @@
     ]
   },
   "scripts": {
-    "vscode:prepublish": "node ./esbuild.js && cd webview-ui && npm run build",
+    "vscode:prepublish": "node ./esbuild.js --production && cd webview-ui && npm run build",
     "compile": "node ./esbuild.js",
+    "test": "tsc -p tsconfig.test.json && mocha out/test/unit/setup.js out/test/unit/**/*.test.js",
+    "lint": "eslint .",
     "package": "vsce package"
   },
   "dependencies": {
@@ -89,9 +91,20 @@
     "pg-pool": "^3.6.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/mocha": "^10.0.10",
     "@types/node": "18.x",
+    "@types/pg": "^8.20.0",
     "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.58.2",
+    "@typescript-eslint/parser": "^8.58.2",
     "esbuild": "^0.19.8",
-    "typescript": "^5.3.2"
+    "eslint": "^10.2.0",
+    "globals": "^17.5.0",
+    "mocha": "^11.7.5",
+    "module-alias": "^2.3.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.2",
+    "typescript-eslint": "^8.58.2"
   }
 }

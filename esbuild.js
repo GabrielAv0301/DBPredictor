@@ -28,7 +28,7 @@ const workerConfig = {
     await esbuild.build(extensionConfig);
     await esbuild.build(workerConfig);
     console.log("esbuild: Build complete!");
-  } catch (err) {
+  } catch {
     process.exit(1);
   }
 })();

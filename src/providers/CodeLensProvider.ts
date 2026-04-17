@@ -25,9 +25,14 @@ export class CodeLensProvider implements vscode.CodeLensProvider {
         
         const lenses: vscode.CodeLens[] = [];
         for (const m of docMutations) {
+            const range = new vscode.Range(
+                m.range.start.line, m.range.start.character,
+                m.range.end.line, m.range.end.character
+            );
+
             if (!schema) {
                 // Show a helpful lens even when disconnected
-                lenses.push(new vscode.CodeLens(m.range, {
+                lenses.push(new vscode.CodeLens(range, {
                     title: '$(database) QueryGuard: Connect to database to see impact analysis',
                     command: 'queryguard.connect'
                 }));
@@ -48,7 +53,7 @@ export class CodeLensProvider implements vscode.CodeLensProvider {
             
             const title = `${icon} ${rowsText} rows${cascadeInfo}${restrictAlert} · [Details]`;
 
-            lenses.push(new vscode.CodeLens(m.range, {
+            lenses.push(new vscode.CodeLens(range, {
                 title,
                 command: 'queryguard.showImpactPanel',
                 arguments: [impact]

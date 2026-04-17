@@ -1,24 +1,30 @@
 import * as assert from 'assert';
-import * as vscode from 'vscode';
+import { DocumentLike } from '../../src/core/detectors/DetectorInterface';
 import { PrismaDetector } from '../../src/core/detectors/PrismaDetector';
 
-// Mock simple de TextDocument para testing
-class MockDocument {
-    constructor(private content: string, public fileName: string = 'test.ts') {}
+class MockDocument implements DocumentLike {
+    private content: string;
+    public fileName: string;
+    constructor(content: string, fileName: string = 'test.ts') {
+        this.content = content;
+        this.fileName = fileName;
+    }
     getText() { return this.content; }
     positionAt(offset: number) {
         const lines = this.content.substring(0, offset).split('\n');
-        return new vscode.Position(lines.length - 1, lines[lines.length - 1].length);
+        return {
+            line: lines.length - 1,
+            character: lines[lines.length - 1].length
+        };
     }
-    uri = { toString: () => 'file://' + this.fileName };
 }
 
 describe('PrismaDetector Unit Tests', () => {
     const detector = new PrismaDetector();
 
     it('should detect simple deleteMany without where', () => {
-        const code = `await prisma.user.deleteMany({});`;
-        const doc = new MockDocument(code) as any as vscode.TextDocument;
+        const code = 'await prisma.user.deleteMany({});';
+        const doc = new MockDocument(code);
         const results = detector.detect(doc);
 
         assert.strictEqual(results.length, 1);
@@ -31,7 +37,7 @@ describe('PrismaDetector Unit Tests', () => {
         const code = `await prisma.post.updateMany({ 
             where: { published: false, authorId: 1 } 
         });`;
-        const doc = new MockDocument(code) as any as vscode.TextDocument;
+        const doc = new MockDocument(code);
         const results = detector.detect(doc);
 
         assert.strictEqual(results.length, 1);
@@ -51,7 +57,7 @@ describe('PrismaDetector Unit Tests', () => {
                 prisma.session.deleteMany({})
             ]);
         `;
-        const doc = new MockDocument(code) as any as vscode.TextDocument;
+        const doc = new MockDocument(code);
         const results = detector.detect(doc);
 
         assert.strictEqual(results.length, 2);
@@ -71,7 +77,7 @@ describe('PrismaDetector Unit Tests', () => {
             const myDb = { user: { deleteMany: () => {} } };
             await myDb.user.deleteMany({}); // Should be ignored
         `;
-        const doc = new MockDocument(code) as any as vscode.TextDocument;
+        const doc = new MockDocument(code);
         const results = detector.detect(doc);
 
         assert.strictEqual(results.length, 0);
@@ -98,7 +104,7 @@ describe('PrismaDetector Unit Tests', () => {
                 );
             }
         `;
-        const doc = new MockDocument(code, 'UsersPage.tsx') as any as vscode.TextDocument;
+        const doc = new MockDocument(code, 'UsersPage.tsx');
         const results = detector.detect(doc);
 
         assert.strictEqual(results.length, 1);

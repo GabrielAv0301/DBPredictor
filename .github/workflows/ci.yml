@@ -20,6 +20,8 @@ jobs:
         run: npm install
       - name: Install webview dependencies
         run: cd webview-ui && npm install
+      - name: Run lint
+        run: npm run lint
       - name: Run tests
         run: |
           npm run compile

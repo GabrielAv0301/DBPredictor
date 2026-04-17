@@ -1,13 +1,17 @@
 import * as assert from 'assert';
-import * as vscode from 'vscode';
+import { DocumentLike } from '../../src/core/detectors/DetectorInterface';
 import { SupabaseDetector } from '../../src/core/detectors/SupabaseDetector';
 
-// Simple mock for TextDocument
-class MockDocument {
-    constructor(public text: string, public fileName: string = 'test.ts') {}
+class MockDocument implements DocumentLike {
+    public text: string;
+    public fileName: string;
+    constructor(text: string, fileName: string = 'test.ts') {
+        this.text = text;
+        this.fileName = fileName;
+    }
     getText() { return this.text; }
-    positionAt(offset: number) {
-        return new vscode.Position(0, 0);
+    positionAt() {
+        return { line: 0, character: 0 };
     }
 }
 
@@ -15,7 +19,7 @@ describe('SupabaseDetector Unit Tests', () => {
     const detector = new SupabaseDetector();
 
     it('Should detect delete with eq filter', () => {
-        const doc = new MockDocument("supabase.from('users').delete().eq('active', false)") as any;
+        const doc = new MockDocument('supabase.from(\'users\').delete().eq(\'active\', false)');
         const results = detector.detect(doc);
         assert.strictEqual(results.length, 1);
         assert.strictEqual(results[0].table, 'users');
@@ -24,7 +28,7 @@ describe('SupabaseDetector Unit Tests', () => {
     });
 
     it('Should detect update without filter (dangerous)', () => {
-        const doc = new MockDocument("supabase.from('logs').update({ archived: true })") as any;
+        const doc = new MockDocument('supabase.from(\'logs\').update({ archived: true })');
         const results = detector.detect(doc);
         assert.strictEqual(results.length, 1);
         assert.strictEqual(results[0].table, 'logs');
@@ -32,7 +36,7 @@ describe('SupabaseDetector Unit Tests', () => {
     });
 
     it('Should detect complex chains', () => {
-        const doc = new MockDocument("supabase.from('posts').delete().match({ author_id: 1, category: 'spam' })") as any;
+        const doc = new MockDocument('supabase.from(\'posts\').delete().match({ author_id: 1, category: \'spam\' })');
         const results = detector.detect(doc);
         assert.strictEqual(results.length, 1);
         assert.strictEqual(results[0].table, 'posts');

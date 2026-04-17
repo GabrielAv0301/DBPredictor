@@ -57,8 +57,8 @@ export class ConnectionManager {
             
             try {
                 this.worker = new Worker(workerPath);
-            } catch (err: any) {
-                Logger.error('Failed to create worker thread', err);
+            } catch (err) {
+                Logger.error('Failed to create worker thread', err instanceof Error ? err : new Error(String(err)));
                 this.isConnecting = false;
                 resolve(false);
                 return;

@@ -1,12 +1,10 @@
-import * as vscode from 'vscode';
 import * as ts from 'typescript';
-import { MutationInfo, MutationDetector, MutationOperation } from './DetectorInterface';
-import { Logger } from '../../utils/logger';
+import { MutationInfo, MutationDetector, MutationOperation, DocumentLike } from './DetectorInterface';
 
 export class PrismaDetector implements MutationDetector {
     private readonly MUTATION_METHODS: MutationOperation[] = ['deleteMany', 'updateMany', 'delete', 'update'];
 
-    public detect(document: vscode.TextDocument): MutationInfo[] {
+    public detect(document: DocumentLike): MutationInfo[] {
         const sourceCode = document.getText();
         const sourceFile = ts.createSourceFile(
             document.fileName,
@@ -32,7 +30,7 @@ export class PrismaDetector implements MutationDetector {
     }
 
     // Extraer mutaciones de Prisma (prisma.user.deleteMany...)
-    private extractMutation(node: ts.CallExpression, document: vscode.TextDocument): MutationInfo | null {
+    private extractMutation(node: ts.CallExpression, document: DocumentLike): MutationInfo | null {
         const expression = node.expression;
         if (!ts.isPropertyAccessExpression(expression)) return null;
 
@@ -76,7 +74,7 @@ export class PrismaDetector implements MutationDetector {
             operation: methodName as MutationOperation,
             hasWhere,
             queryParams,
-            range: new vscode.Range(start, end),
+            range: { start, end },
             sourceText: node.getText()
         };
     }
