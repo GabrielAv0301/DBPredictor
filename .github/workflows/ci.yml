@@ -1,28 +1,66 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: package-lock.json
-      - name: Install dependencies
-        run: npm install
-      - name: Install webview dependencies
-        run: cd webview-ui && npm install
-      - name: Run lint
-        run: npm run lint
-      - name: Run tests
-        run: |
-          npm run compile
-          npm test
+    lint:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '18'
+                  cache: 'npm'
+                  cache-dependency-path: package-lock.json
+            - name: Install dependencies
+              run: npm ci
+            - name: Run lint
+              run: npm run lint
+
+    typecheck:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '18'
+                  cache: 'npm'
+                  cache-dependency-path: package-lock.json
+            - name: Install dependencies
+              run: npm ci
+            - name: Run typecheck
+              run: npx tsc --noEmit
+
+    test:
+        needs: [lint, typecheck]
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, windows-latest, macos-latest]
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: '18'
+                  cache: 'npm'
+                  cache-dependency-path: package-lock.json
+            - name: Cache webview dependencies
+              uses: actions/cache@v4
+              with:
+                  path: webview-ui/node_modules
+                  key: webview-${{ hashFiles('webview-ui/package-lock.json') }}
+                  restore-keys: |
+                      webview-
+            - name: Install root dependencies
+              run: npm ci
+            - name: Install webview dependencies
+              run: npm ci --prefix webview-ui
+            - name: Compile extension
+              run: npm run compile
+            - name: Run tests with coverage
+              run: npx c8 --reporter=text npm test

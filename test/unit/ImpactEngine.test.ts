@@ -7,17 +7,17 @@ describe('ImpactEngine Unit Tests', () => {
     const mockSchema: SchemaData = {
         tables: [
             { tableName: 'users', rowCount: 1000 },
-            { tableName: 'sessions', rowCount: 5000 }
+            { tableName: 'sessions', rowCount: 5000 },
         ],
         relationships: [
             {
                 tableName: 'sessions',
                 columnName: 'userId',
                 foreignTableName: 'users',
-                deleteRule: 'CASCADE'
-            }
+                deleteRule: 'CASCADE',
+            },
         ],
-        timestamp: Date.now()
+        timestamp: Date.now(),
     };
 
     it('Should classify as DESTRUCTIVE when deleteMany has no WHERE clause', () => {
@@ -26,7 +26,7 @@ describe('ImpactEngine Unit Tests', () => {
             operation: 'deleteMany',
             hasWhere: false,
             range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-            sourceText: 'prisma.user.deleteMany({})'
+            sourceText: 'prisma.user.deleteMany({})',
         };
 
         const result = ImpactEngine.calculate(mutation, mockSchema);
@@ -40,7 +40,7 @@ describe('ImpactEngine Unit Tests', () => {
             operation: 'deleteMany',
             hasWhere: true,
             range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-            sourceText: 'prisma.user.deleteMany({ where: { id: 1 } })'
+            sourceText: 'prisma.user.deleteMany({ where: { id: 1 } })',
         };
 
         const result = ImpactEngine.calculate(mutation, mockSchema);
@@ -52,10 +52,10 @@ describe('ImpactEngine Unit Tests', () => {
     it('Should classify single delete as SAFE', () => {
         const mutation: MutationInfo = {
             table: 'users',
-            operation: 'delete',         // Single record
+            operation: 'delete', // Single record
             hasWhere: true,
             range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-            sourceText: 'prisma.user.delete({ where: { id: 1 } })'
+            sourceText: 'prisma.user.delete({ where: { id: 1 } })',
         };
 
         const result = ImpactEngine.calculate(mutation, mockSchema);
@@ -66,14 +66,19 @@ describe('ImpactEngine Unit Tests', () => {
 
     it('Should detect RESTRICT violations', () => {
         const restrictSchema: SchemaData = {
-            tables: [{ tableName: 'users', rowCount: 100 }, { tableName: 'orders', rowCount: 50 }],
-            relationships: [{
-                tableName: 'orders',
-                columnName: 'userId',
-                foreignTableName: 'users',
-                deleteRule: 'RESTRICT'
-            }],
-            timestamp: Date.now()
+            tables: [
+                { tableName: 'users', rowCount: 100 },
+                { tableName: 'orders', rowCount: 50 },
+            ],
+            relationships: [
+                {
+                    tableName: 'orders',
+                    columnName: 'userId',
+                    foreignTableName: 'users',
+                    deleteRule: 'RESTRICT',
+                },
+            ],
+            timestamp: Date.now(),
         };
 
         const mutation: MutationInfo = {
@@ -81,7 +86,7 @@ describe('ImpactEngine Unit Tests', () => {
             operation: 'deleteMany',
             hasWhere: false,
             range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-            sourceText: 'prisma.user.deleteMany({})'
+            sourceText: 'prisma.user.deleteMany({})',
         };
 
         const result = ImpactEngine.calculate(mutation, restrictSchema);

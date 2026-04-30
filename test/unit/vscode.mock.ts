@@ -1,5 +1,26 @@
 export class Position {
-    constructor(public line: number, public character: number) {}
+    constructor(
+        public line: number,
+        public character: number
+    ) {}
+}
+
+export class MockDocument {
+    public text: string;
+    public fileName: string;
+    constructor(text: string, fileName: string = 'test.ts') {
+        this.text = text;
+        this.fileName = fileName;
+    }
+    getText() {
+        return this.text;
+    }
+    positionAt(offset: number): Position {
+        const lines = this.text.substring(0, offset).split('\n');
+        const line = lines.length - 1;
+        const character = lines[line].length;
+        return new Position(line, character);
+    }
 }
 
 export class Range {
@@ -28,34 +49,37 @@ export const TextEditorRevealType = {
     Default: 0,
     InCenter: 1,
     InCenterIfOutsideViewport: 2,
-    AtTop: 3
+    AtTop: 3,
 } as const;
 
 export const Uri = {
     file: (path: string) => ({ fsPath: path, toString: () => path }),
-    parse: (url: string) => ({ toString: () => url })
+    parse: (url: string) => ({ toString: () => url }),
 };
 
 export const window = {
     showInformationMessage: () => Promise.resolve(),
     showErrorMessage: () => Promise.resolve(),
-    withProgress: (_options: unknown, task: (progress: { report: (value: { message?: string }) => void }) => Promise<unknown>) => task({ report: () => {} }),
+    withProgress: (
+        _options: unknown,
+        task: (progress: { report: (value: { message?: string }) => void }) => Promise<unknown>
+    ) => task({ report: () => {} }),
     createOutputChannel: () => ({
         appendLine: () => {},
         show: () => {},
-        clear: () => {}
-    })
+        clear: () => {},
+    }),
 };
 
 export const commands = {
     registerCommand: () => ({ dispose: () => {} }),
-    executeCommand: () => Promise.resolve()
+    executeCommand: () => Promise.resolve(),
 };
 
 export const workspace = {
     getConfiguration: () => ({
-        get: () => undefined
-    })
+        get: () => undefined,
+    }),
 };
 
 export interface TextDocument {

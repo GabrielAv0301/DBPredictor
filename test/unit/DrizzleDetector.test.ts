@@ -1,23 +1,6 @@
 import * as assert from 'assert';
-import { DocumentLike } from '../../src/core/detectors/DetectorInterface';
 import { DrizzleDetector } from '../../src/core/detectors/DrizzleDetector';
-
-class MockDocument implements DocumentLike {
-    private content: string;
-    public fileName: string;
-    constructor(content: string, fileName: string = 'test.ts') {
-        this.content = content;
-        this.fileName = fileName;
-    }
-    getText() { return this.content; }
-    positionAt(offset: number) {
-        const lines = this.content.substring(0, offset).split('\n');
-        return {
-            line: lines.length - 1,
-            character: lines[lines.length - 1].length
-        };
-    }
-}
+import { MockDocument } from './vscode.mock';
 
 describe('DrizzleDetector Unit Tests', () => {
     const detector = new DrizzleDetector();
@@ -34,7 +17,8 @@ describe('DrizzleDetector Unit Tests', () => {
     });
 
     it('should detect update with where clause', () => {
-        const code = 'await db.update(postsTable).set({ title: \'New\' }).where(eq(postsTable.id, 1));';
+        const code =
+            'await db.update(postsTable).set({ title: \'New\' }).where(eq(postsTable.id, 1));';
         const doc = new MockDocument(code);
         const results = detector.detect(doc);
 

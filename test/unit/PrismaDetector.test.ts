@@ -1,23 +1,6 @@
 import * as assert from 'assert';
-import { DocumentLike } from '../../src/core/detectors/DetectorInterface';
 import { PrismaDetector } from '../../src/core/detectors/PrismaDetector';
-
-class MockDocument implements DocumentLike {
-    private content: string;
-    public fileName: string;
-    constructor(content: string, fileName: string = 'test.ts') {
-        this.content = content;
-        this.fileName = fileName;
-    }
-    getText() { return this.content; }
-    positionAt(offset: number) {
-        const lines = this.content.substring(0, offset).split('\n');
-        return {
-            line: lines.length - 1,
-            character: lines[lines.length - 1].length
-        };
-    }
-}
+import { MockDocument } from './vscode.mock';
 
 describe('PrismaDetector Unit Tests', () => {
     const detector = new PrismaDetector();
@@ -43,11 +26,11 @@ describe('PrismaDetector Unit Tests', () => {
         assert.strictEqual(results.length, 1);
         assert.strictEqual(results[0].table, 'post');
         assert.strictEqual(results[0].hasWhere, true);
-        
+
         // Verificamos parámetros en lugar de string concatenado
         const params = results[0].queryParams || [];
-        assert.ok(params.some(p => p.column === 'published' && p.value === false));
-        assert.ok(params.some(p => p.column === 'authorId' && p.value === 1));
+        assert.ok(params.some((p) => p.column === 'published' && p.value === false));
+        assert.ok(params.some((p) => p.column === 'authorId' && p.value === 1));
     });
 
     it('should detect mutations inside $transaction block', () => {
@@ -61,12 +44,12 @@ describe('PrismaDetector Unit Tests', () => {
         const results = detector.detect(doc);
 
         assert.strictEqual(results.length, 2);
-        
+
         // Primera mutación dentro del array
         assert.strictEqual(results[0].table, 'log');
         assert.strictEqual(results[0].hasWhere, true);
-        assert.ok(results[0].queryParams?.some(p => p.column === 'level' && p.value === 'INFO'));
-        
+        assert.ok(results[0].queryParams?.some((p) => p.column === 'level' && p.value === 'INFO'));
+
         // Segunda mutación dentro del array
         assert.strictEqual(results[1].table, 'session');
         assert.strictEqual(results[1].hasWhere, false);
@@ -111,6 +94,8 @@ describe('PrismaDetector Unit Tests', () => {
         assert.strictEqual(results[0].table, 'user');
         assert.strictEqual(results[0].operation, 'deleteMany');
         assert.strictEqual(results[0].hasWhere, true);
-        assert.ok(results[0].queryParams?.some(p => p.column === 'status' && p.value === 'inactive'));
+        assert.ok(
+            results[0].queryParams?.some((p) => p.column === 'status' && p.value === 'inactive')
+        );
     });
 });

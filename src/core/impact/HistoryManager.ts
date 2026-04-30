@@ -14,21 +14,28 @@ export class HistoryManager {
 
     constructor(private context: vscode.ExtensionContext) {}
 
+    private generateId(): string {
+        const radix = 36;
+        const substringStart = 2;
+        const substringEnd = 9;
+        return `${Date.now()}-${Math.random().toString(radix).substring(substringStart, substringEnd)}`;
+    }
+
     public save(impact: ImpactResult, document: vscode.TextDocument): HistoryEntry[] {
         const history = this.getHistory();
-        
+
         const newEntry: HistoryEntry = {
-            id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: this.generateId(),
             timestamp: Date.now(),
             impact,
-            fileName: document.fileName
+            fileName: document.fileName,
         };
 
         history.unshift(newEntry);
-        
+
         // Trim history to max entries
         const trimmedHistory = history.slice(0, HistoryManager.MAX_ENTRIES);
-        
+
         this.context.globalState.update(HistoryManager.STORAGE_KEY, trimmedHistory);
         return trimmedHistory;
     }

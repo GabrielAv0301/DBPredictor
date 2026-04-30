@@ -22,52 +22,64 @@ export class CodeLensProvider implements vscode.CodeLensProvider {
 
         const docMutations = this.mutations.get(document.uri.toString()) || [];
         const schema = SchemaCache.getInstance().getData();
-        
+
         const lenses: vscode.CodeLens[] = [];
         for (const m of docMutations) {
             const range = new vscode.Range(
-                m.range.start.line, m.range.start.character,
-                m.range.end.line, m.range.end.character
+                m.range.start.line,
+                m.range.start.character,
+                m.range.end.line,
+                m.range.end.character
             );
 
             if (!schema) {
                 // Show a helpful lens even when disconnected
-                lenses.push(new vscode.CodeLens(range, {
-                    title: '$(database) QueryGuard: Connect to database to see impact analysis',
-                    command: 'queryguard.connect'
-                }));
+                lenses.push(
+                    new vscode.CodeLens(range, {
+                        title: '$(database) QueryGuard: Connect to database to see impact analysis',
+                        command: 'queryguard.connect',
+                    })
+                );
                 continue;
             }
 
             const impact = ImpactEngine.calculate(m, schema);
             const icon = this.getRiskIcon(impact.riskLevel);
-            const cascadeInfo = impact.cascadeChain.length > 0 
-                ? ` · Cascade: ${impact.cascadeChain.map(c => `${c.table}(${c.rowsEstimated})`).join(', ')}` 
-                : '';
-            
+            const cascadeInfo =
+                impact.cascadeChain.length > 0
+                    ? ` · Cascade: ${impact.cascadeChain.map((c) => `${c.table}(${c.rowsEstimated})`).join(', ')}`
+                    : '';
+
             const restrictAlert = impact.willFailByRestrict ? ' · ⛔ WILL FAIL (Restrict)' : '';
 
-            const rowsText = impact.estimationQuality === 'worst-case' 
-                ? `Up to ~${impact.totalRowsAffected.toLocaleString()}` 
-                : `~${impact.totalRowsAffected.toLocaleString()}`;
-            
+            const rowsText =
+                impact.estimationQuality === 'worst-case'
+                    ? `Up to ~${impact.totalRowsAffected.toLocaleString()}`
+                    : `~${impact.totalRowsAffected.toLocaleString()}`;
+
             const title = `${icon} ${rowsText} rows${cascadeInfo}${restrictAlert} · [Details]`;
 
-            lenses.push(new vscode.CodeLens(range, {
-                title,
-                command: 'queryguard.showImpactPanel',
-                arguments: [impact]
-            }));
+            lenses.push(
+                new vscode.CodeLens(range, {
+                    title,
+                    command: 'queryguard.showImpactPanel',
+                    arguments: [impact],
+                })
+            );
         }
         return lenses;
     }
 
     private getRiskIcon(risk: RiskLevel): string {
         switch (risk) {
-            case 'DESTRUCTIVE': return '☠️';
-            case 'CRITICAL': return '🔴';
-            case 'WARNING': return '⚠️';
-            default: return '✅';
+            case 'DESTRUCTIVE':
+                return '☠️';
+            case 'CRITICAL':
+                return '🔴';
+            case 'WARNING':
+                return '⚠️';
+            default:
+                return '✅';
         }
     }
 }

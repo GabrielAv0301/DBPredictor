@@ -1,3 +1,5 @@
+import { SSLMode } from '../../config/SSLConfig';
+
 export interface TableStats {
     tableName: string;
     rowCount: number;
@@ -18,13 +20,13 @@ export interface SchemaData {
 
 export type SqlParam = string | number | boolean | null;
 
-export type WorkerMessage = 
-    | { type: 'CONNECT'; connectionString: string }
+export type WorkerMessage =
+    | { type: 'CONNECT'; connectionString: string; sslMode?: SSLMode }
     | { type: 'QUERY_SCHEMA' }
     | { type: 'SIMULATE'; sql: string; params: SqlParam[] }
     | { type: 'DISCONNECT' };
 
-export type WorkerResponse = 
+export type WorkerResponse =
     | { type: 'CONNECTED'; success: true }
     | { type: 'CONNECTED'; success: false; error: string }
     | { type: 'SCHEMA_DATA'; data: SchemaData }

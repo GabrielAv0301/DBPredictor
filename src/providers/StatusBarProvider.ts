@@ -20,7 +20,9 @@ export class StatusBarProvider {
 
     public static getInstance(): StatusBarProvider {
         if (!this.instance) {
-            throw new Error('StatusBarProvider not initialized. Call StatusBarProvider.init() first.');
+            throw new Error(
+                'StatusBarProvider not initialized. Call StatusBarProvider.init() first.'
+            );
         }
         return this.instance;
     }
@@ -29,7 +31,9 @@ export class StatusBarProvider {
         const isConnected = ConnectionManager.getInstance().getIsConnected();
         if (isConnected) {
             this.statusBarItem.text = '$(database) QueryGuard: Connected';
-            this.statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.remoteBackground');
+            this.statusBarItem.backgroundColor = new vscode.ThemeColor(
+                'statusBarItem.remoteBackground'
+            );
             this.statusBarItem.tooltip = 'Click to refresh schema';
         } else {
             this.statusBarItem.text = '$(circle-slash) QueryGuard: Disconnected';

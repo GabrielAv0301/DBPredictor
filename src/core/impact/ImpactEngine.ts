@@ -4,11 +4,13 @@ import { ImpactResult, RiskLevel, CascadeResult, EstimationQuality } from './typ
 import { CascadeAnalyzer } from './CascadeAnalyzer';
 
 export class ImpactEngine {
+    private static readonly CRITICAL_ROW_THRESHOLD = 10000;
+
     public static calculate(mutation: MutationInfo, schema: SchemaData): ImpactResult {
-        const tableStats = schema.tables.find(t => t.tableName === mutation.table);
+        const tableStats = schema.tables.find((t) => t.tableName === mutation.table);
         const totalRowsInTable = tableStats?.rowCount || 0;
-        
-        let baseRowsAffected: number; 
+
+        let baseRowsAffected: number;
         let estimationQuality: EstimationQuality;
 
         if (mutation.operation === 'deleteMany' || mutation.operation === 'updateMany') {
@@ -28,7 +30,7 @@ export class ImpactEngine {
 
         const analyzer = new CascadeAnalyzer(schema);
         const cascadeChain = analyzer.analyze(mutation.table, baseRowsAffected);
-        
+
         const totalRowsAffected = this.sumCascadeRows(cascadeChain) + baseRowsAffected;
         const willFailByRestrict = this.checkRestrictViolation(cascadeChain);
 
@@ -46,16 +48,24 @@ export class ImpactEngine {
             estimationQuality,
             riskLevel,
             cascadeChain,
-            willFailByRestrict
+            willFailByRestrict,
         };
     }
 
     private static sumCascadeRows(results: CascadeResult[]): number {
-        return results.reduce((acc, curr) => acc + curr.rowsEstimated + this.sumCascadeRows(curr.children), 0);
+        return results.reduce(
+            (acc, curr) => acc + curr.rowsEstimated + this.sumCascadeRows(curr.children),
+            0
+        );
     }
 
     private static checkRestrictViolation(results: CascadeResult[]): boolean {
-        return results.some(r => r.rule === 'RESTRICT' || r.rule === 'NO ACTION' || this.checkRestrictViolation(r.children));
+        return results.some(
+            (r) =>
+                r.rule === 'RESTRICT' ||
+                r.rule === 'NO ACTION' ||
+                this.checkRestrictViolation(r.children)
+        );
     }
 
     private static classifyRisk(mutation: MutationInfo, base: number, total: number): RiskLevel {
@@ -66,7 +76,7 @@ export class ImpactEngine {
         if (isBulk && !mutation.hasWhere) return 'DESTRUCTIVE';
 
         // Impacto crítico por volumen
-        if (total > 10000) return 'CRITICAL';
+        if (total > this.CRITICAL_ROW_THRESHOLD) return 'CRITICAL';
 
         // Registro único — siempre relativamente seguro
         if (isSingleRecord) return 'SAFE';

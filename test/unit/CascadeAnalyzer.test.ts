@@ -9,29 +9,29 @@ describe('CascadeAnalyzer Unit Tests', () => {
             { tableName: 'users', rowCount: 100 },
             { tableName: 'posts', rowCount: 500 },
             { tableName: 'comments', rowCount: 2000 },
-            { tableName: 'profiles', rowCount: 100 }
+            { tableName: 'profiles', rowCount: 100 },
         ],
         relationships: [
-            { 
-                tableName: 'posts', 
-                columnName: 'authorId', 
-                foreignTableName: 'users', 
-                deleteRule: 'CASCADE' 
+            {
+                tableName: 'posts',
+                columnName: 'authorId',
+                foreignTableName: 'users',
+                deleteRule: 'CASCADE',
             },
-            { 
-                tableName: 'comments', 
-                columnName: 'postId', 
-                foreignTableName: 'posts', 
-                deleteRule: 'CASCADE' 
+            {
+                tableName: 'comments',
+                columnName: 'postId',
+                foreignTableName: 'posts',
+                deleteRule: 'CASCADE',
             },
-            { 
-                tableName: 'profiles', 
-                columnName: 'userId', 
-                foreignTableName: 'users', 
-                deleteRule: 'RESTRICT' 
-            }
+            {
+                tableName: 'profiles',
+                columnName: 'userId',
+                foreignTableName: 'users',
+                deleteRule: 'RESTRICT',
+            },
         ],
-        timestamp: Date.now()
+        timestamp: Date.now(),
     };
 
     const analyzer = new CascadeAnalyzer(mockSchema);
@@ -44,7 +44,7 @@ describe('CascadeAnalyzer Unit Tests', () => {
     it('should detect direct CASCADE relation', () => {
         // posts -> comments (CASCADE)
         const results = analyzer.analyze('posts', 10); // Afectamos 10 posts
-        
+
         assert.strictEqual(results.length, 1);
         assert.strictEqual(results[0].table, 'comments');
         assert.strictEqual(results[0].rule, 'CASCADE');
@@ -56,9 +56,9 @@ describe('CascadeAnalyzer Unit Tests', () => {
     it('should detect nested CASCADE chain (A -> B -> C)', () => {
         // users -> posts -> comments
         const results = analyzer.analyze('users', 1);
-        
+
         assert.strictEqual(results.length, 2); // posts y profiles
-        const postsResult = results.find(r => r.table === 'posts');
+        const postsResult = results.find((r) => r.table === 'posts');
         assert.ok(postsResult);
         assert.strictEqual(postsResult?.children.length, 1);
         assert.strictEqual(postsResult?.children[0].table, 'comments');
@@ -67,8 +67,8 @@ describe('CascadeAnalyzer Unit Tests', () => {
     it('should identify RESTRICT violation', () => {
         // users -> profiles (RESTRICT)
         const results = analyzer.analyze('users', 1);
-        const profilesResult = results.find(r => r.table === 'profiles');
-        
+        const profilesResult = results.find((r) => r.table === 'profiles');
+
         assert.strictEqual(profilesResult?.rule, 'RESTRICT');
     });
 
@@ -76,16 +76,16 @@ describe('CascadeAnalyzer Unit Tests', () => {
         const circularSchema: SchemaData = {
             tables: [
                 { tableName: 'A', rowCount: 10 },
-                { tableName: 'B', rowCount: 10 }
+                { tableName: 'B', rowCount: 10 },
             ],
             relationships: [
                 { tableName: 'B', columnName: 'aId', foreignTableName: 'A', deleteRule: 'CASCADE' },
-                { tableName: 'A', columnName: 'bId', foreignTableName: 'B', deleteRule: 'CASCADE' }
+                { tableName: 'A', columnName: 'bId', foreignTableName: 'B', deleteRule: 'CASCADE' },
             ],
-            timestamp: Date.now()
+            timestamp: Date.now(),
         };
         const circularAnalyzer = new CascadeAnalyzer(circularSchema);
-        
+
         // No debería lanzar error de stack overflow
         const results = circularAnalyzer.analyze('A', 1);
         assert.strictEqual(results.length, 1);

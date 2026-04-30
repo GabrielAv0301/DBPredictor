@@ -1,6 +1,7 @@
 import { parentPort } from 'worker_threads';
 import { Pool, PoolConfig } from 'pg';
 import { WorkerMessage, SqlParam } from '../core/db/types';
+import { SSLMode, buildPGSSLConfig } from '../config/SSLConfig';
 
 let pool: Pool | null = null;
 
@@ -9,7 +10,7 @@ if (parentPort) {
         try {
             switch (message.type) {
                 case 'CONNECT':
-                    await handleConnect(message.connectionString);
+                    await handleConnect(message.connectionString, message.sslMode);
                     break;
                 case 'QUERY_SCHEMA':
                     await handleQuerySchema();
@@ -28,28 +29,28 @@ if (parentPort) {
     });
 }
 
-async function handleConnect(connectionString: string) {
+const POOL_CONNECTION_TIMEOUT_MS = 10000;
+const POOL_IDLE_TIMEOUT_MS = 10000;
+const POOL_MAX_CONNECTIONS = 1;
+
+async function handleConnect(connectionString: string, sslMode?: SSLMode): Promise<void> {
     if (pool) {
         await pool.end();
     }
 
-    // Análisis de la cadena de conexión para SSL
-    const isLocal = connectionString.includes('localhost') || 
-                   connectionString.includes('127.0.0.1') || 
-                   connectionString.includes('0.0.0.0');
-
     const poolConfig: PoolConfig = {
         connectionString,
-        connectionTimeoutMillis: 10000, // Aumentamos el timeout a 10s para redes lentas
-        idleTimeoutMillis: 10000,
-        max: 1
+        connectionTimeoutMillis: POOL_CONNECTION_TIMEOUT_MS,
+        idleTimeoutMillis: POOL_IDLE_TIMEOUT_MS,
+        max: POOL_MAX_CONNECTIONS,
     };
 
-    // Solo activar SSL si no es local, para evitar el error "Server does not support SSL"
-    if (!isLocal) {
-        poolConfig.ssl = {
-            rejectUnauthorized: false
-        };
+    // SSL is only disabled for local connections; for remote, use the configured mode
+    if (sslMode !== undefined && sslMode !== SSLMode.DISABLE) {
+        poolConfig.ssl = buildPGSSLConfig(sslMode);
+    } else {
+        // For local connections (no SSL mode specified), SSL is disabled by default
+        poolConfig.ssl = undefined;
     }
 
     pool = new Pool(poolConfig);
@@ -64,10 +65,11 @@ async function handleConnect(connectionString: string) {
     }
 }
 
-async function handleQuerySchema() {
+async function handleQuerySchema(): Promise<void> {
     if (!pool) throw new Error('Database not connected');
 
-    const tablesQuery = 'SELECT relname as "tableName", n_live_tup as "rowCount" FROM pg_stat_user_tables;';
+    const tablesQuery =
+        'SELECT relname as "tableName", n_live_tup as "rowCount" FROM pg_stat_user_tables;';
     const fkQuery = `
         SELECT
             tc.table_name as "tableName",
@@ -81,22 +83,19 @@ async function handleQuerySchema() {
         WHERE tc.constraint_type = 'FOREIGN KEY';
     `;
 
-    const [tablesRes, fkRes] = await Promise.all([
-        pool.query(tablesQuery),
-        pool.query(fkQuery)
-    ]);
+    const [tablesRes, fkRes] = await Promise.all([pool.query(tablesQuery), pool.query(fkQuery)]);
 
     parentPort?.postMessage({
         type: 'SCHEMA_DATA',
         data: {
             tables: tablesRes.rows,
             relationships: fkRes.rows,
-            timestamp: Date.now()
-        }
+            timestamp: Date.now(),
+        },
     });
 }
 
-async function handleSimulate(sql: string, params: SqlParam[]) {
+async function handleSimulate(sql: string, params: SqlParam[]): Promise<void> {
     if (!pool) throw new Error('Database not connected');
     const client = await pool.connect();
     try {
@@ -106,17 +105,17 @@ async function handleSimulate(sql: string, params: SqlParam[]) {
         parentPort?.postMessage({ type: 'SIMULATION_RESULT', rowCount: res.rowCount || 0 });
     } catch (error: unknown) {
         await client.query('ROLLBACK');
-        parentPort?.postMessage({ 
-            type: 'SIMULATION_RESULT', 
-            rowCount: 0, 
-            error: error instanceof Error ? error.message : String(error) 
+        parentPort?.postMessage({
+            type: 'SIMULATION_RESULT',
+            rowCount: 0,
+            error: error instanceof Error ? error.message : String(error),
         });
     } finally {
         client.release();
     }
 }
 
-async function handleDisconnect() {
+async function handleDisconnect(): Promise<void> {
     if (pool) {
         await pool.end();
         pool = null;

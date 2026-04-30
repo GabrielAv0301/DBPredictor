@@ -2,7 +2,14 @@ import * as vscode from 'vscode';
 
 export class Logger {
     private static channel: vscode.OutputChannel;
-    private static sensitiveKeys = ['password', 'secret', 'token', 'connectionstring', 'url', 'key'];
+    private static sensitiveKeys = [
+        'password',
+        'secret',
+        'token',
+        'connectionstring',
+        'url',
+        'key',
+    ];
 
     public static init() {
         if (!this.channel) {
@@ -31,7 +38,10 @@ export class Logger {
                 }
                 cache.add(value);
             }
-            if (typeof key === 'string' && Logger.sensitiveKeys.some(k => key.toLowerCase().includes(k))) {
+            if (
+                typeof key === 'string' &&
+                Logger.sensitiveKeys.some((k) => key.toLowerCase().includes(k))
+            ) {
                 return '[REDACTED]';
             }
             if (value instanceof Error) {

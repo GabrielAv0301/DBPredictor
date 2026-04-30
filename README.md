@@ -7,7 +7,7 @@
 [English](#english-documentation) | [Español](#documentación-en-español)
 
 > **Stop guessing. See the impact of your ORM mutations BEFORE you hit save.**
-> 
+>
 > QueryGuard is a VS Code extension that predicts the impact of your Prisma, Supabase, and Drizzle queries in real-time. It analyzes your AST as you type to estimate how many rows will be affected, including recursive cascade deletions and potential foreign key violations.
 
 ![Damage Detection Demo](https://raw.githubusercontent.com/GabrielAv0301/DBPredictor/main/assets/damage-view.gif)
@@ -15,6 +15,7 @@
 ---
 
 <a name="english-documentation"></a>
+
 ## English Documentation
 
 ### The Safety Co-pilot (Philosophy)
@@ -30,23 +31,48 @@ QueryGuard is designed as a complementary safety layer for your development work
 
 ### Key Features
 
-*   **Real-time Row Estimation**: Uses PostgreSQL internal statistics (n_live_tup) for instant "worst-case" calculations as you type.
-*   **Visual Cascade Analysis**: Traces Foreign Keys (FKs) recursively to show the full impact on related tables.
-*   **Safe Dry-Run Simulation**: Execute real queries against live data with zero risk of modification.
-*   **Analysis History**: Keep track of previous estimations in the side panel.
+- **Real-time Row Estimation**: Uses PostgreSQL internal statistics (n_live_tup) for instant "worst-case" calculations as you type.
+- **Visual Cascade Analysis**: Traces Foreign Keys (FKs) recursively to show the full impact on related tables.
+- **Safe Dry-Run Simulation**: Execute real queries against live data with zero risk of modification.
+- **Analysis History**: Keep track of previous estimations in the side panel.
 
 ### Technical Requirements & Compatibility
 
-*   **Database Support**: Currently, QueryGuard exclusively supports PostgreSQL (including Supabase, Neon, CockroachDB, and AWS RDS).
-*   **ORM Support**:
-    *   **Supabase**: .from().delete() and .from().update() chains.
-    *   **Prisma**: delete, update, deleteMany, and updateMany.
-    *   **Drizzle ORM**: delete(), update(), and insert().
-*   **Simulation Note**: While detection is automatic, the Simulation feature requires explicit filters (like .eq() or where: {}) to accurately translate your ORM logic into safe test SQL.
+- **Database Support**: Currently, QueryGuard exclusively supports PostgreSQL (including Supabase, Neon, CockroachDB, and AWS RDS).
+- **ORM Support**:
+    - **Supabase**: .from().delete() and .from().update() chains.
+    - **Prisma**: delete, update, deleteMany, and updateMany.
+    - **Drizzle ORM**: delete(), update(), and insert().
+- **Simulation Note**: While detection is automatic, the Simulation feature requires explicit filters (like .eq() or where: {}) to accurately translate your ORM logic into safe test SQL.
+
+### Configuration Reference
+
+You can customize QueryGuard behavior in your VS Code `settings.json`:
+
+- `queryguard.enabled`: (boolean) Enable or disable real-time analysis. Default: `true`.
+- `queryguard.showCodeLens`: (boolean) Show inline impact estimations. Default: `true`.
+- `queryguard.sslMode`: (string) SSL connection mode (`auto`, `disable`, `require`, `verify-ca`, `verify-full`). Default: `auto`.
+- `queryguard.analysisDebounce`: (number) Delay in milliseconds before re-analyzing code. Default: `750`.
+- `queryguard.cacheTTL`: (number) Schema cache time-to-live in seconds. Default: `300`.
+
+### Architecture
+
+QueryGuard works by parsing your code into an Abstract Syntax Tree (AST).
+1. **Detection**: It identifies ORM calls that mutate data.
+2. **Schema Analysis**: It fetches your database schema (tables, columns, foreign keys) and caches it.
+3. **Impact Logic**: It calculates the "Blast Radius" by recursively following CASCADE rules in your schema.
+4. **Simulation**: It uses a dedicated Worker thread to run a real query inside a Transaction that is always rolled back, ensuring 100% accuracy with zero risk.
+
+### Troubleshooting
+
+- **No CodeLenses appearing**: Ensure your database is connected via the Command Palette.
+- **Connection errors**: If using a remote database, try setting `queryguard.sslMode` to `require`.
+- **Inaccurate row counts**: QueryGuard uses `n_live_tup` for instant estimates, which might be slightly out of sync with real data. Use the **Simulate** feature for 100% accuracy.
 
 ---
 
 <a name="documentación-en-español"></a>
+
 ## Documentación en Español
 
 ### Tu Copiloto de Seguridad (Filosofía)
@@ -62,19 +88,19 @@ QueryGuard está diseñado como una capa de seguridad complementaria para tu flu
 
 ### Funciones Principales
 
-*   **Estimación en Tiempo Real**: Utiliza estadísticas internas de PostgreSQL (n_live_tup) para cálculos instantáneos del "peor de los casos" mientras escribes.
-*   **Análisis Visual de Cascadas**: Rastrea Claves Foráneas (FKs) de forma recursiva para mostrar el impacto total en tablas relacionadas.
-*   **Simulación de Prueba Segura**: Ejecuta consultas reales contra datos en vivo con riesgo cero de modificación.
-*   **Historial de Análisis**: Mantén un registro de estimaciones anteriores en el panel lateral.
+- **Estimación en Tiempo Real**: Utiliza estadísticas internas de PostgreSQL (n_live_tup) para cálculos instantáneos del "peor de los casos" mientras escribes.
+- **Análisis Visual de Cascadas**: Rastrea Claves Foráneas (FKs) de forma recursiva para mostrar el impacto total en tablas relacionadas.
+- **Simulación de Prueba Segura**: Ejecuta consultas reales contra datos en vivo con riesgo cero de modificación.
+- **Historial de Análisis**: Mantén un registro de estimaciones anteriores en el panel lateral.
 
 ### Requisitos Técnicos y Compatibilidad
 
-*   **Bases de Datos**: Actualmente, QueryGuard soporta exclusivamente PostgreSQL (incluyendo Supabase, Neon, CockroachDB y AWS RDS).
-*   **ORMs Soportados**:
-    *   **Supabase**: Cadenas .from().delete() and .from().update().
-    *   **Prisma**: Soporte para delete, update, deleteMany y updateMany.
-    *   **Drizzle ORM**: Detección de delete(), update() e insert().
-*   **Nota de Simulación**: Aunque la detección es automática, la función de Simulación requiere filtros explícitos (como .eq() o where: {}) para traducir con precisión la lógica de tu ORM al SQL de prueba seguro.
+- **Bases de Datos**: Actualmente, QueryGuard soporta exclusivamente PostgreSQL (incluyendo Supabase, Neon, CockroachDB y AWS RDS).
+- **ORMs Soportados**:
+    - **Supabase**: Cadenas .from().delete() and .from().update().
+    - **Prisma**: Soporte para delete, update, deleteMany y updateMany.
+    - **Drizzle ORM**: Detección de delete(), update() e insert().
+- **Nota de Simulación**: Aunque la detección es automática, la función de Simulación requiere filtros explícitos (como .eq() o where: {}) para traducir con precisión la lógica de tu ORM al SQL de prueba seguro.
 
 ---
 

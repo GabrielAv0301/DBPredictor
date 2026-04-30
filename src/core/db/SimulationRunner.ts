@@ -23,12 +23,21 @@ export class SimulationRunner {
         }
 
         return new Promise((resolve) => {
-            // Timeout para evitar esperas infinitas. Si se cumple, forzamos la desconexión para liberar el pool.
+            // Timeout to prevent infinite waiting. If reached, force disconnection to release the pool.
             const timeout = setTimeout(async () => {
                 conn.setOnSimulationResult(undefined);
-                Logger.error(`Simulation timeout after ${this.SIMULATION_TIMEOUT_MS}ms. Forcing worker restart to clear connection pool.`);
-                await conn.disconnect(); // Esto mata al worker y libera el slot del pool
-                resolve({ rowCount: 0, error: `Simulation timed out (${this.SIMULATION_TIMEOUT_MS / 1000}s). The query was too heavy and has been cancelled.` });
+                Logger.error(
+                    `Simulation timeout after ${this.SIMULATION_TIMEOUT_MS}ms. Forcing worker restart to clear connection pool.`
+                );
+                await conn.disconnect(); // This kills the worker and frees the pool slot
+
+                // Automatically reconnect to restore the user's session state
+                await conn.reconnect();
+
+                resolve({
+                    rowCount: 0,
+                    error: `Simulation timed out (${this.SIMULATION_TIMEOUT_MS / 1000}s). The query was too heavy and has been cancelled.`,
+                });
             }, this.SIMULATION_TIMEOUT_MS);
 
             conn.setOnSimulationResult((rowCount, error) => {
@@ -42,29 +51,40 @@ export class SimulationRunner {
         });
     }
 
-    // Generar SQL parametrizado y sanitizado para identificadores
-    private static generateSimulationSql(impact: ImpactResult): { sql: string | null, params: SqlParam[], error?: string } {
+    // Generate parameterized and sanitized SQL for identifiers
+    private static generateSimulationSql(impact: ImpactResult): {
+        sql: string | null;
+        params: SqlParam[];
+        error?: string;
+    } {
         const table = impact.table;
         const op = impact.operation;
         const params: SqlParam[] = [];
-        
-        // Blindaje contra SQL Injection en Identificadores (Tablas/Columnas)
-        // Solo permitimos caracteres alfanuméricos y guiones bajos para identificadores dinámicos.
-        // Si detectamos algo sospechoso (comillas, punto y coma, comentarios), abortamos.
-        const identifierRegex = /^[a-zA-Z0-9_]+$/;
+
+        // Protection against SQL Injection in Identifiers (Tables/Columns)
+        // Allow alphanumeric, underscores, and dots for schemas.
+        const identifierRegex = /^[a-zA-Z0-9_.]+$/;
         if (!identifierRegex.test(table)) {
-            return { sql: null, params: [], error: `Security Alert: Invalid table name detected ("${table}"). Only alphanumeric and underscores allowed.` };
+            return {
+                sql: null,
+                params: [],
+                error: `Security Alert: Invalid table name detected ("${table}"). Only alphanumeric, underscores and dots allowed.`,
+            };
         }
 
         const safeTable = `"${table}"`;
 
-        // Construir cláusula WHERE parametrizada si existen filtros
+        // Build parameterized WHERE clause if filters exist
         let whereClause = '';
         if (impact.hasWhere && impact.queryParams) {
             const conditions: string[] = [];
             for (const p of impact.queryParams) {
                 if (!identifierRegex.test(p.column)) {
-                    return { sql: null, params: [], error: `Security Alert: Invalid column name detected ("${p.column}").` };
+                    return {
+                        sql: null,
+                        params: [],
+                        error: `Security Alert: Invalid column name detected ("${p.column}").`,
+                    };
                 }
                 params.push(p.value as SqlParam);
                 conditions.push(`"${p.column}" = $${params.length}`);
@@ -76,7 +96,7 @@ export class SimulationRunner {
         if (op === 'deleteMany' || op === 'delete') {
             sql = `DELETE FROM ${safeTable}${whereClause}`;
         } else if (op === 'updateMany' || op === 'update') {
-            // Usamos una operación inocua que dispare los triggers/cascadas y devuelva rowCount
+            // Use a harmless operation that triggers cascades/triggers and returns rowCount
             sql = `UPDATE ${safeTable} SET "${impact.queryParams?.[0]?.column || 'id'}" = "${impact.queryParams?.[0]?.column || 'id'}"${whereClause}`;
         }
 

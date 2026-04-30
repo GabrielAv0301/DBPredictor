@@ -9,20 +9,20 @@ export default tseslint.config(
         files: ['**/*.ts'],
         languageOptions: {
             parserOptions: {
-                project: ['./tsconfig.test.json'],
+                project: ['./tsconfig.json', './tsconfig.test.json'],
                 tsconfigRootDir: import.meta.dirname,
             },
             globals: {
                 ...globals.node,
-                ...globals.mocha
-            }
+                ...globals.mocha,
+            },
         },
         rules: {
             '@typescript-eslint/no-unused-vars': 'warn',
             '@typescript-eslint/no-explicit-any': 'warn',
             'no-console': 'error',
-            'semi': ['error', 'always'],
-            'quotes': ['error', 'single']
+            semi: ['error', 'always'],
+            quotes: ['error', 'single'],
         },
     },
     {
@@ -30,14 +30,14 @@ export default tseslint.config(
         languageOptions: {
             globals: {
                 ...globals.node,
-            }
+            },
         },
         rules: {
             'no-console': 'off', // Permitimos console en scripts de build
-            '@typescript-eslint/no-require-imports': 'off'
-        }
+            '@typescript-eslint/no-require-imports': 'off',
+        },
     },
     {
-        ignores: ['out/', 'dist/', '**/node_modules/**', 'webview-ui/']
+        ignores: ['out/', 'dist/', '**/node_modules/**', 'webview-ui/'],
     }
 );

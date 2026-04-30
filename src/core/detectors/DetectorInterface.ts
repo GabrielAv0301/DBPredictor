@@ -1,4 +1,5 @@
-export type MutationOperation = 'deleteMany' | 'updateMany' | 'delete' | 'update';
+import { MutationOperation } from '../../shared/types';
+export { MutationOperation };
 
 export interface PositionLike {
     line: number;
@@ -20,8 +21,8 @@ export interface MutationInfo {
     table: string;
     operation: MutationOperation;
     hasWhere: boolean;
-    whereClause?: string; 
-    queryParams?: { column: string, value: unknown }[]; // Parámetros para consultas seguras
+    whereClause?: string;
+    queryParams?: { column: string; value: unknown }[]; // Parámetros para consultas seguras
     range: RangeLike;
     sourceText: string;
 }

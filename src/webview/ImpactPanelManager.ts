@@ -10,7 +10,11 @@ export class ImpactPanelManager {
     private _disposables: vscode.Disposable[] = [];
     private _lastImpact?: ImpactResult;
 
-    private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, private historyManager: HistoryManager) {
+    private constructor(
+        panel: vscode.WebviewPanel,
+        extensionUri: vscode.Uri,
+        private historyManager: HistoryManager
+    ) {
         this._panel = panel;
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
@@ -43,7 +47,11 @@ export class ImpactPanelManager {
         );
     }
 
-    public static createOrShow(extensionUri: vscode.Uri, impact: ImpactResult, historyManager: HistoryManager) {
+    public static createOrShow(
+        extensionUri: vscode.Uri,
+        impact: ImpactResult,
+        historyManager: HistoryManager
+    ) {
         const column = vscode.window.activeTextEditor
             ? vscode.window.activeTextEditor.viewColumn
             : undefined;
@@ -62,13 +70,15 @@ export class ImpactPanelManager {
             column || vscode.ViewColumn.One,
             {
                 enableScripts: true,
-                localResourceRoots: [
-                    vscode.Uri.joinPath(extensionUri, 'out')
-                ]
+                localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'out')],
             }
         );
 
-        ImpactPanelManager.currentPanel = new ImpactPanelManager(panel, extensionUri, historyManager);
+        ImpactPanelManager.currentPanel = new ImpactPanelManager(
+            panel,
+            extensionUri,
+            historyManager
+        );
         ImpactPanelManager.currentPanel._lastImpact = impact;
     }
 
@@ -83,7 +93,10 @@ export class ImpactPanelManager {
 
     public sendHistory() {
         const history = this.historyManager.getHistory();
-        this._panel.webview.postMessage({ type: 'UPDATE_HISTORY', data: history } as WebviewMessage);
+        this._panel.webview.postMessage({
+            type: 'UPDATE_HISTORY',
+            data: history,
+        } as WebviewMessage);
     }
 
     public dispose() {
@@ -96,8 +109,12 @@ export class ImpactPanelManager {
     }
 
     private _getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.Uri) {
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'out', 'webview-ui', 'index.js'));
-        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'out', 'webview-ui', 'index.css'));
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(extensionUri, 'out', 'webview-ui', 'index.js')
+        );
+        const styleUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(extensionUri, 'out', 'webview-ui', 'index.css')
+        );
 
         const nonce = this.getNonce();
 

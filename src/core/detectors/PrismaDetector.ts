@@ -1,8 +1,18 @@
 import * as ts from 'typescript';
-import { MutationInfo, MutationDetector, MutationOperation, DocumentLike } from './DetectorInterface';
+import {
+    MutationInfo,
+    MutationDetector,
+    MutationOperation,
+    DocumentLike,
+} from './DetectorInterface';
 
 export class PrismaDetector implements MutationDetector {
-    private readonly MUTATION_METHODS: MutationOperation[] = ['deleteMany', 'updateMany', 'delete', 'update'];
+    private readonly MUTATION_METHODS: MutationOperation[] = [
+        'deleteMany',
+        'updateMany',
+        'delete',
+        'update',
+    ];
 
     public detect(document: DocumentLike): MutationInfo[] {
         const sourceCode = document.getText();
@@ -45,18 +55,19 @@ export class PrismaDetector implements MutationDetector {
         }
 
         const tableName = tableAccess.name.text;
-        
+
         // Extraer filtros 'where' de los argumentos
         let hasWhere = false;
-        let queryParams: { column: string, value: unknown }[] = [];
+        let queryParams: { column: string; value: unknown }[] = [];
 
         if (node.arguments.length > 0) {
             const firstArg = node.arguments[0];
             if (ts.isObjectLiteralExpression(firstArg)) {
-                const whereProp = firstArg.properties.find(prop => 
-                    ts.isPropertyAssignment(prop) && 
-                    ts.isIdentifier(prop.name) && 
-                    prop.name.text === 'where'
+                const whereProp = firstArg.properties.find(
+                    (prop) =>
+                        ts.isPropertyAssignment(prop) &&
+                        ts.isIdentifier(prop.name) &&
+                        prop.name.text === 'where'
                 ) as ts.PropertyAssignment | undefined;
 
                 if (whereProp && ts.isObjectLiteralExpression(whereProp.initializer)) {
@@ -75,16 +86,16 @@ export class PrismaDetector implements MutationDetector {
             hasWhere,
             queryParams,
             range: { start, end },
-            sourceText: node.getText()
+            sourceText: node.getText(),
         };
     }
 
     // Extraer literales del objeto 'where' como parámetros seguros
-    private extractParams(node: ts.ObjectLiteralExpression): { column: string, value: unknown }[] {
-        const params: { column: string, value: unknown }[] = [];
+    private extractParams(node: ts.ObjectLiteralExpression): { column: string; value: unknown }[] {
+        const params: { column: string; value: unknown }[] = [];
         for (const prop of node.properties) {
             if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) continue;
-            
+
             const field = prop.name.text;
             const value = prop.initializer;
 

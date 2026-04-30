@@ -1,5 +1,11 @@
 import * as ts from 'typescript';
-import { MutationInfo, MutationDetector, MutationOperation, DocumentLike } from './DetectorInterface';
+import {
+    MutationInfo,
+    MutationDetector,
+    MutationOperation,
+    DocumentLike,
+} from './DetectorInterface';
+import { getCallChain } from '../../utils/ast';
 
 export class DrizzleDetector implements MutationDetector {
     private readonly TARGET_METHODS = ['delete', 'update'];
@@ -19,7 +25,9 @@ export class DrizzleDetector implements MutationDetector {
         const visit = (node: ts.Node) => {
             if (ts.isCallExpression(node)) {
                 // Evitamos doble conteo en cadenas db.delete().where()
-                const isPartOfChain = ts.isPropertyAccessExpression(node.parent) && ts.isCallExpression(node.parent?.parent);
+                const isPartOfChain =
+                    ts.isPropertyAccessExpression(node.parent) &&
+                    ts.isCallExpression(node.parent?.parent);
 
                 if (!isPartOfChain) {
                     const mutation = this.extractDrizzleMutation(node, document);
@@ -35,11 +43,15 @@ export class DrizzleDetector implements MutationDetector {
     }
 
     // Extraer mutaciones de Drizzle ORM (db.delete(table)...)
-    private extractDrizzleMutation(node: ts.CallExpression, document: DocumentLike): MutationInfo | null {
-        const { chain, root } = this.getCallChain(node);
+    private extractDrizzleMutation(
+        node: ts.CallExpression,
+        document: DocumentLike
+    ): MutationInfo | null {
+        const { chain, root } = getCallChain(node);
 
         // Soporte para múltiples alias de cliente (db, orm, etc)
-        if (!root || !ts.isIdentifier(root) || !this.TARGET_ALIASES.includes(root.text)) return null;
+        if (!root || !ts.isIdentifier(root) || !this.TARGET_ALIASES.includes(root.text))
+            return null;
 
         // La llamada raíz debe ser delete() o update()
         const rootCall = chain?.[chain.length - 1];
@@ -59,7 +71,7 @@ export class DrizzleDetector implements MutationDetector {
         }
 
         // Detectar si hay cláusula .where() en la cadena
-        const hasWhere = chain?.some(c => c.name === 'where');
+        const hasWhere = chain?.some((c) => c.name === 'where');
 
         const start = document.positionAt(node.getStart());
         const end = document.positionAt(node.getEnd());
@@ -73,29 +85,7 @@ export class DrizzleDetector implements MutationDetector {
             hasWhere,
             queryParams: [],
             range: { start, end },
-            sourceText: node.getText()
+            sourceText: node.getText(),
         };
-    }
-
-    private getCallChain(node: ts.CallExpression): { chain: { name: string, args: ts.NodeArray<ts.Expression> }[], root: ts.Node | null } {
-        const chain: { name: string, args: ts.NodeArray<ts.Expression> }[] = [];
-        let current: ts.Node = node;
-
-        while (ts.isCallExpression(current)) {
-            const expr = current.expression;
-            if (ts.isPropertyAccessExpression(expr)) {
-                chain.push({ name: expr.name.text, args: current.arguments });
-                current = expr.expression;
-            } else if (ts.isIdentifier(expr)) {
-                // End of chain (e.g., db.delete)
-                chain.push({ name: expr.text, args: current.arguments });
-                current = expr; // This is the root identifier if it was just db.delete()
-                break;
-            } else {
-                break;
-            }
-        }
-
-        return { chain, root: current };
     }
 }

@@ -19,11 +19,11 @@ export async function activate(context: vscode.ExtensionContext) {
     Logger.init();
     Logger.info('QueryGuard is now active.');
 
-    // Servicios base
+    // Base services
     SecretsManager.init(context);
     const connManager = ConnectionManager.getInstance();
 
-    // Inyectar ruta absoluta del worker para evitar errores de resolución de módulos
+    // Inject absolute worker path to avoid module resolution errors
     const workerPath = path.join(context.extensionPath, 'out', 'workers', 'db.worker.js');
     connManager.setWorkerPath(workerPath);
 
@@ -35,24 +35,27 @@ export async function activate(context: vscode.ExtensionContext) {
     const codeLensProvider = new CodeLensProvider();
     const historyManager = new HistoryManager(context);
 
-    // Registro de proveedores de CodeLens
+    // Register CodeLens providers
     context.subscriptions.push(
         vscode.languages.registerCodeLensProvider(
             [
                 { language: 'typescript', scheme: 'file' },
                 { language: 'typescriptreact', scheme: 'file' },
                 { language: 'javascript', scheme: 'file' },
-                { language: 'javascriptreact', scheme: 'file' }
+                { language: 'javascriptreact', scheme: 'file' },
             ],
             codeLensProvider
         )
     );
 
-    // Escuchar cambios en la configuración para refrescar CodeLenses
+    // Listen for configuration changes to refresh CodeLenses
     context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('queryguard.showCodeLens') || e.affectsConfiguration('queryguard.enabled')) {
-                // Forzamos un re-análisis para actualizar los CodeLenses
+        vscode.workspace.onDidChangeConfiguration((e) => {
+            if (
+                e.affectsConfiguration('queryguard.showCodeLens') ||
+                e.affectsConfiguration('queryguard.enabled')
+            ) {
+                // Force re-analysis to update CodeLenses
                 if (vscode.window.activeTextEditor) {
                     analyzeDocument(vscode.window.activeTextEditor.document);
                 }
@@ -60,7 +63,7 @@ export async function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Actualización de esquema y caché
+    // Schema and cache updates
     connManager.setOnSchemaUpdate((data) => {
         schemaCache.update(data);
         statusBar.update();
@@ -69,42 +72,47 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    // Manejo de errores de conexión
+    // Connection error handling
     connManager.setOnError((error) => {
         statusBar.update();
         vscode.window.showErrorMessage(`QueryGuard: Database connection error. ${error}`);
     });
 
-    // Análisis AST del documento
+    // AST Document Analysis
     const analyzeDocument = (document: vscode.TextDocument) => {
-        const supportedLanguages = ['typescript', 'typescriptreact', 'javascript', 'javascriptreact'];
+        const supportedLanguages = [
+            'typescript',
+            'typescriptreact',
+            'javascript',
+            'javascriptreact',
+        ];
         if (!supportedLanguages.includes(document.languageId)) return;
-        
+
         const config = vscode.workspace.getConfiguration('queryguard');
         if (!config.get<boolean>('enabled', true)) return;
-        
+
         try {
             const prismaMutations = prismaDetector.detect(document);
             const supabaseMutations = supabaseDetector.detect(document);
             const drizzleMutations = drizzleDetector.detect(document);
-            
+
             const allMutations = [...prismaMutations, ...supabaseMutations, ...drizzleMutations];
-            
+
             if (allMutations.length > 0) {
                 Logger.info(`Detected ${allMutations.length} mutations`, {
                     prisma: prismaMutations.length,
                     supabase: supabaseMutations.length,
-                    drizzle: drizzleMutations.length
+                    drizzle: drizzleMutations.length,
                 });
             }
-            
+
             codeLensProvider.setMutations(document.uri.toString(), allMutations);
         } catch (error) {
             Logger.error('AST Detection failed', error);
         }
     };
 
-    // Ajustamos el debounce segun config (por defecto 750ms)
+    // Adjust debounce based on config (default 750ms)
     const config = vscode.workspace.getConfiguration('queryguard');
     const debounceMs = config.get<number>('analysisDebounce', 750);
 
@@ -112,22 +120,22 @@ export async function activate(context: vscode.ExtensionContext) {
         analyzeDocument(document);
     }, debounceMs);
 
-    // Escuchamos cambios en archivos
+    // Listen for file changes
     context.subscriptions.push(
-        vscode.workspace.onDidChangeTextDocument(event => {
+        vscode.workspace.onDidChangeTextDocument((event) => {
             debouncedAnalyze(event.document);
         }),
-        vscode.window.onDidChangeActiveTextEditor(editor => {
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
             if (editor) analyzeDocument(editor.document);
         })
     );
 
-    // Análisis inicial al arrancar
+    // Initial analysis on startup
     if (vscode.window.activeTextEditor) {
         analyzeDocument(vscode.window.activeTextEditor.document);
     }
 
-    // Auto-conexión si ya tenemos la cadena guardada
+    // Auto-connect if connection string is stored
     const storedConnStr = await SecretsManager.getInstance().getConnectionString();
     if (storedConnStr) {
         Logger.info('Stored connection string found, auto-connecting...');
@@ -135,27 +143,29 @@ export async function activate(context: vscode.ExtensionContext) {
         statusBar.update();
     }
 
-    // --- Comandos de la extensión ---
+    // --- Extension Commands ---
 
     const connectCmd = vscode.commands.registerCommand('queryguard.connect', async () => {
         const connectionString = await vscode.window.showInputBox({
             prompt: 'Enter your database connection string',
             placeHolder: 'postgresql://user:password@host:port/database',
             password: true,
-            ignoreFocusOut: true
+            ignoreFocusOut: true,
         });
 
         if (connectionString) {
             try {
                 await SecretsManager.getInstance().saveConnectionString(connectionString);
-                const success = await connManager.connect(connectionString);
-                if (success) {
+                const result = await connManager.connect(connectionString);
+                if (result.success) {
                     vscode.window.showInformationMessage('QueryGuard: Connected to database.');
                     if (vscode.window.activeTextEditor) {
                         analyzeDocument(vscode.window.activeTextEditor.document);
                     }
                 } else {
-                    vscode.window.showErrorMessage('QueryGuard: Connection failed. Check logs.');
+                    vscode.window.showErrorMessage(
+                        `QueryGuard: Connection failed. ${result.error || 'Check logs for details.'}`
+                    );
                 }
                 statusBar.update();
             } catch (error) {
@@ -181,43 +191,52 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    const showImpactPanelCmd = vscode.commands.registerCommand('queryguard.showImpactPanel', (impact) => {
-        if (vscode.window.activeTextEditor) {
-            historyManager.save(impact, vscode.window.activeTextEditor.document);
-        }
-        ImpactPanelManager.createOrShow(context.extensionUri, impact, historyManager);
-    });
-
-    const simulateCmd = vscode.commands.registerCommand('queryguard.simulate', async (impact: ImpactResult | undefined) => {
-        if (!impact) {
-            vscode.window.showWarningMessage(
-                'QueryGuard: No mutation selected. Click a Code Lens on a database mutation to simulate it.'
-            );
-            return;
-        }
-
-        vscode.window.withProgress({
-            location: vscode.ProgressLocation.Notification,
-            title: 'Running safe simulation...',
-            cancellable: false
-        }, async () => {
-            const result = await SimulationRunner.simulate(impact);
-            if (result.error) {
-                vscode.window.showErrorMessage(`Simulation failed: ${result.error}`);
-            } else {
-                vscode.window.showInformationMessage(
-                    `Simulation complete: ${result.rowCount} rows affected. No data was modified.`
-                );
-                ImpactPanelManager.currentPanel?.updateSimulationResult(result.rowCount);
+    const showImpactPanelCmd = vscode.commands.registerCommand(
+        'queryguard.showImpactPanel',
+        (impact) => {
+            if (vscode.window.activeTextEditor) {
+                historyManager.save(impact, vscode.window.activeTextEditor.document);
             }
-        });
-    });
+            ImpactPanelManager.createOrShow(context.extensionUri, impact, historyManager);
+        }
+    );
+
+    const simulateCmd = vscode.commands.registerCommand(
+        'queryguard.simulate',
+        async (impact: ImpactResult | undefined) => {
+            if (!impact) {
+                vscode.window.showWarningMessage(
+                    'QueryGuard: No mutation selected. Click a Code Lens on a database mutation to simulate it.'
+                );
+                return;
+            }
+
+            vscode.window.withProgress(
+                {
+                    location: vscode.ProgressLocation.Notification,
+                    title: 'Running safe simulation...',
+                    cancellable: false,
+                },
+                async () => {
+                    const result = await SimulationRunner.simulate(impact);
+                    if (result.error) {
+                        vscode.window.showErrorMessage(`Simulation failed: ${result.error}`);
+                    } else {
+                        vscode.window.showInformationMessage(
+                            `Simulation complete: ${result.rowCount} rows affected. No data was modified.`
+                        );
+                        ImpactPanelManager.currentPanel?.updateSimulationResult(result.rowCount);
+                    }
+                }
+            );
+        }
+    );
 
     context.subscriptions.push(
-        connectCmd, 
-        disconnectCmd, 
-        refreshSchemaCmd, 
-        showImpactPanelCmd, 
+        connectCmd,
+        disconnectCmd,
+        refreshSchemaCmd,
+        showImpactPanelCmd,
         simulateCmd,
         { dispose: () => statusBar.dispose() }
     );

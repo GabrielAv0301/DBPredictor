@@ -8,10 +8,13 @@ export class SchemaCache {
     private data: SchemaData | null = null;
     private isRefreshing: boolean = false;
 
+    private static readonly DEFAULT_TTL_SECONDS = 300;
+    private static readonly MS_PER_SECOND = 1000;
+
     private get TTL_MS(): number {
         const config = vscode.workspace.getConfiguration('queryguard');
-        const seconds = config.get<number>('cacheTTL', 300);
-        return seconds * 1000;
+        const seconds = config.get<number>('cacheTTL', SchemaCache.DEFAULT_TTL_SECONDS);
+        return seconds * SchemaCache.MS_PER_SECOND;
     }
 
     private constructor() {}
@@ -26,9 +29,9 @@ export class SchemaCache {
     public update(newData: SchemaData) {
         this.data = newData;
         this.isRefreshing = false;
-        Logger.info('Schema cache updated', { 
-            tables: newData.tables.length, 
-            relations: newData.relationships.length 
+        Logger.info('Schema cache updated', {
+            tables: newData.tables.length,
+            relations: newData.relationships.length,
         });
     }
 
@@ -39,7 +42,7 @@ export class SchemaCache {
         if (isExpired && !this.isRefreshing) {
             Logger.warn('Schema cache expired. Triggering background refresh...');
             this.isRefreshing = true;
-            
+
             const conn = ConnectionManager.getInstance();
             if (conn.getIsConnected()) {
                 conn.querySchema();
