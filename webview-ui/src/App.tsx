@@ -11,12 +11,28 @@ import { HistoryEntry, ImpactResult } from './types/shared';
 
 type Tab = 'current' | 'history';
 
+function formatStaleness(isoDate: string | null | undefined): string {
+    if (!isoDate) return 'unknown';
+    const ms = Date.now() - new Date(isoDate).getTime();
+    const hours = ms / (1000 * 60 * 60);
+    if (hours < 1) return 'recent';
+    if (hours < 24) return `${Math.floor(hours)}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+}
+
+function getStalenessColor(staleness: string): string {
+    if (staleness === 'recent' || staleness === 'unknown') return 'var(--vscode-charts-lines)';
+    return 'var(--vscode-editorWarning-foreground)';
+}
+
 const App: React.FC = () => {
     const { lastMessage, postMessage } = useVSCodeMessage();
     const [activeTab, setActiveTab] = useState<Tab>('current');
     const [history, setHistory] = useState<HistoryEntry[]>([]);
     const [impact, setImpact] = useState<ImpactResult | null>(null);
     const [simulationResult, setSimulationResult] = useState<number | null>(null);
+    const [simulationWarn, setSimulationWarn] = useState<string | null>(null);
+    const [isConnected, setIsConnected] = useState(true);
 
     useEffect(() => {
         postMessage({ type: 'WEBVIEW_READY' });
@@ -29,12 +45,17 @@ const App: React.FC = () => {
             case 'UPDATE_IMPACT':
                 setImpact(lastMessage.data);
                 setSimulationResult(null); // Reset simulation on new impact
+                setSimulationWarn(null);
                 break;
             case 'UPDATE_HISTORY':
                 setHistory(lastMessage.data);
                 break;
             case 'SIMULATION_RESULT':
                 setSimulationResult(lastMessage.rowCount);
+                setSimulationWarn(lastMessage.warnCascade || null);
+                break;
+            case 'CONNECTION_STATUS':
+                setIsConnected(lastMessage.data.isConnected);
                 break;
         }
     }, [lastMessage]);
@@ -49,8 +70,47 @@ const App: React.FC = () => {
         }
     };
 
+    const exportHistory = (format: 'json' | 'csv') => {
+        postMessage({ type: 'EXPORT_HISTORY', format });
+    };
+
     return (
         <div className="app-container">
+            {!isConnected && (
+                <div
+                    style={{
+                        background: 'var(--vscode-notificationBackground)',
+                        border: '1px solid var(--vscode-notificationBorder)',
+                        padding: '8px 12px',
+                        marginBottom: '16px',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        color: 'var(--vscode-notificationForeground)',
+                    }}
+                >
+                    <AlertCircle size={16} />
+                    <span>Disconnected from database. Some data may be stale.</span>
+                    <button
+                        onClick={() =>
+                            (window as any).vscode.postMessage({ type: 'RECONNECT_PROMPT' })
+                        }
+                        style={{
+                            marginLeft: 'auto',
+                            padding: '4px 12px',
+                            cursor: 'pointer',
+                            background: 'var(--vscode-button-background)',
+                            color: 'var(--vscode-button-foreground)',
+                            border: 'none',
+                            borderRadius: '2px',
+                        }}
+                    >
+                        Reconnect
+                    </button>
+                </div>
+            )}
+
             <nav
                 style={{
                     display: 'flex',
@@ -126,26 +186,42 @@ const App: React.FC = () => {
                                     Operation: <code>{impact.operation}</code>
                                 </span>
                                 {impact.estimationQuality === 'worst-case' && (
-                                    <span
-                                        title="This number is based on PostgreSQL internal catalog statistics (n_live_tup). These statistics can be slightly outdated until an ANALYZE or autovacuum runs. Click 'Simulate' for 100% exact live counts."
-                                        style={{
-                                            marginLeft: '12px',
-                                            background: 'var(--vscode-badge-background)',
-                                            color: 'var(--vscode-badge-foreground)',
-                                            padding: '2px 8px',
-                                            borderRadius: '4px',
-                                            fontSize: '0.65rem',
-                                            fontWeight: 'bold',
-                                            cursor: 'help',
-                                            border: '1px solid var(--vscode-button-background)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                        }}
-                                    >
-                                        <Info size={10} />
-                                        WORST CASE ESTIMATION
-                                    </span>
+                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                        <span
+                                            title="This number is based on PostgreSQL internal catalog statistics (n_live_tup). These statistics can be slightly outdated until an ANALYZE or autovacuum runs. Click 'Simulate' for 100% exact live counts."
+                                            style={{
+                                                marginLeft: '12px',
+                                                background: 'var(--vscode-badge-background)',
+                                                color: 'var(--vscode-badge-foreground)',
+                                                padding: '2px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.65rem',
+                                                fontWeight: 'bold',
+                                                cursor: 'help',
+                                                border: '1px solid var(--vscode-button-background)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                            }}
+                                        >
+                                            <Info size={10} />
+                                            WORST CASE ESTIMATION
+                                        </span>
+                                        {impact.statsLastUpdated && (
+                                            <span
+                                                style={{
+                                                    marginLeft: '8px',
+                                                    color: getStalenessColor(
+                                                        formatStaleness(impact.statsLastUpdated)
+                                                    ),
+                                                    fontSize: '0.65rem',
+                                                    opacity: 0.8,
+                                                }}
+                                            >
+                                                Stats: {formatStaleness(impact.statsLastUpdated)}
+                                            </span>
+                                        )}
+                                    </div>
                                 )}
                                 <button
                                     onClick={runSimulation}
@@ -186,27 +262,44 @@ const App: React.FC = () => {
                                 </button>
                             </div>
                             {simulationResult !== null && (
-                                <div
-                                    style={{
-                                        marginTop: '12px',
-                                        padding: '8px 12px',
-                                        background: 'var(--vscode-editor-selectionBackground)',
-                                        borderLeft: '4px solid var(--vscode-button-background)',
-                                        borderRadius: '4px',
-                                        fontSize: '0.8rem',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                    }}
-                                >
-                                    <Zap size={14} color="var(--vscode-button-background)" />
-                                    <span>
-                                        Simulation Result:{' '}
-                                        <strong>
-                                            {simulationResult.toLocaleString()} rows affected
-                                        </strong>{' '}
-                                        (No data modified)
-                                    </span>
+                                <div>
+                                    <div
+                                        style={{
+                                            marginTop: '12px',
+                                            padding: '8px 12px',
+                                            background: 'var(--vscode-editor-selectionBackground)',
+                                            borderLeft: '4px solid var(--vscode-button-background)',
+                                            borderRadius: '4px',
+                                            fontSize: '0.8rem',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                        }}
+                                    >
+                                        <Zap size={14} color="var(--vscode-button-background)" />
+                                        <span>
+                                            Simulation Result:{' '}
+                                            <strong>
+                                                {simulationResult.toLocaleString()} rows affected
+                                            </strong>{' '}
+                                            (No data modified)
+                                        </span>
+                                    </div>
+                                    {simulationWarn && (
+                                        <div
+                                            style={{
+                                                marginTop: '8px',
+                                                color: 'var(--vscode-editorWarning-foreground)',
+                                                fontSize: '0.75rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '6px',
+                                            }}
+                                        >
+                                            <AlertCircle size={14} />
+                                            <span>{simulationWarn}</span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </header>
@@ -300,7 +393,11 @@ const App: React.FC = () => {
                     </div>
                 )
             ) : (
-                <HistoryView history={history} onClear={clearHistory} />
+                <HistoryView
+                    history={history}
+                    onClear={clearHistory}
+                    onExport={(format) => exportHistory(format)}
+                />
             )}
 
             <footer

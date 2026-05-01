@@ -2,6 +2,7 @@ import { parentPort } from 'worker_threads';
 import { Pool, PoolConfig } from 'pg';
 import { WorkerMessage, SqlParam } from '../core/db/types';
 import { SSLMode, buildPGSSLConfig } from '../config/SSLConfig';
+import { Logger } from '../utils/logger';
 
 let pool: Pool | null = null;
 
@@ -55,6 +56,13 @@ async function handleConnect(connectionString: string, sslMode?: SSLMode): Promi
 
     pool = new Pool(poolConfig);
 
+    // Detect dead connections and notify the main thread
+    pool.on('error', (err: Error) => {
+        const msg = `Pool error: ${err.message}`;
+        Logger.warn(msg);
+        parentPort?.postMessage({ type: 'ERROR', error: msg });
+    });
+
     try {
         const client = await pool.connect();
         client.release();
@@ -68,18 +76,22 @@ async function handleConnect(connectionString: string, sslMode?: SSLMode): Promi
 async function handleQuerySchema(): Promise<void> {
     if (!pool) throw new Error('Database not connected');
 
-    const tablesQuery =
-        'SELECT relname as "tableName", n_live_tup as "rowCount" FROM pg_stat_user_tables;';
+    const tablesQuery = `SELECT relname as "tableName", n_live_tup as "rowCount",
+         last_analyze as "lastAnalyze", last_autoanalyze as "lastAutoAnalyze"
+         FROM pg_stat_user_tables;`;
+
     const fkQuery = `
         SELECT
             tc.table_name as "tableName",
             kcu.column_name as "columnName",
             ccu.table_name AS "foreignTableName",
-            rc.delete_rule as "deleteRule"
+            rc.delete_rule as "deleteRule",
+            cc.is_nullable = 'YES' as "isNullable"
         FROM information_schema.table_constraints tc
         JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
         JOIN information_schema.referential_constraints rc ON tc.constraint_name = rc.constraint_name
         JOIN information_schema.constraint_column_usage ccu ON rc.unique_constraint_name = ccu.constraint_name
+        JOIN information_schema.columns cc ON cc.table_name = tc.table_name AND cc.column_name = kcu.column_name
         WHERE tc.constraint_type = 'FOREIGN KEY';
     `;
 

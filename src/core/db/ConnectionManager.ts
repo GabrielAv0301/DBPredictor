@@ -15,6 +15,7 @@ export class ConnectionManager {
     private onSchemaUpdate?: (data: SchemaData) => void;
     private onSimulationResult?: (rowCount: number, error?: string) => void;
     private onError?: (error: string) => void;
+    private onConnectionStatusChange?: (isConnected: boolean) => void;
     private customWorkerPath: string | null = null;
 
     private constructor() {}
@@ -42,6 +43,16 @@ export class ConnectionManager {
 
     public setOnError(callback: ((error: string) => void) | undefined) {
         this.onError = callback;
+    }
+
+    public setOnConnectionStatusChange(callback: ((isConnected: boolean) => void) | undefined) {
+        this.onConnectionStatusChange = callback;
+    }
+
+    private notifyConnectionStatus(isConnected: boolean) {
+        if (this.onConnectionStatusChange) {
+            this.onConnectionStatusChange(isConnected);
+        }
     }
 
     public getIsConnected(): boolean {
@@ -100,6 +111,7 @@ export class ConnectionManager {
                     switch (response.type) {
                         case 'CONNECTED':
                             this.isConnected = response.success;
+                            this.notifyConnectionStatus(this.isConnected);
                             this.isConnecting = false;
                             if (response.success) {
                                 Logger.info('DB Worker: Connected successfully.');
@@ -124,6 +136,7 @@ export class ConnectionManager {
                         case 'ERROR':
                             Logger.error('DB Worker error', response.error);
                             this.isConnected = false;
+                            this.notifyConnectionStatus(false);
                             this.isConnecting = false;
                             if (this.onError) {
                                 this.onError(response.error || 'Unknown error');
@@ -181,6 +194,7 @@ export class ConnectionManager {
                     await this.worker?.terminate();
                     this.worker = null;
                     this.isConnected = false;
+                    this.notifyConnectionStatus(false);
                     Logger.info('DB Worker: Terminated gracefully.');
                     resolve();
                 }, 200);

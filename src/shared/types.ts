@@ -31,6 +31,7 @@ export interface ImpactResult {
     riskLevel: RiskLevel;
     cascadeChain: CascadeResult[];
     willFailByRestrict: boolean;
+    statsLastUpdated?: string | null;
 }
 
 export interface HistoryEntry {
@@ -46,12 +47,15 @@ export interface HistoryEntry {
 export type WebviewMessage =
     | { type: 'UPDATE_IMPACT'; data: ImpactResult }
     | { type: 'UPDATE_HISTORY'; data: HistoryEntry[] }
-    | { type: 'SIMULATION_RESULT'; rowCount: number; error?: string }
+    | { type: 'SIMULATION_RESULT'; rowCount: number; warnCascade?: string; error?: string }
+    | { type: 'CONNECTION_STATUS'; data: { isConnected: boolean } }
     | { type: 'WEBVIEW_READY' };
 
 /** Messages sent from the Webview to the Extension */
 export type ExtensionMessage =
     | { type: 'GET_HISTORY' }
     | { type: 'CLEAR_HISTORY' }
+    | { type: 'EXPORT_HISTORY'; format: 'json' | 'csv' }
     | { type: 'SIMULATE'; data: ImpactResult }
+    | { type: 'RECONNECT_PROMPT' }
     | { type: 'WEBVIEW_READY' };

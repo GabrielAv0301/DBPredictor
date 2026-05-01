@@ -92,4 +92,54 @@ describe('CascadeAnalyzer Unit Tests', () => {
         assert.strictEqual(results[0].table, 'B');
         assert.strictEqual(results[0].children.length, 0); // No vuelve a procesar A
     });
+
+    it('should estimate 0 direct rows for RESTRICT rule (not a deletion)', () => {
+        const schema: SchemaData = {
+            tables: [
+                { tableName: 'parent', rowCount: 10 },
+                { tableName: 'child', rowCount: 50 },
+            ],
+            relationships: [
+                {
+                    tableName: 'child',
+                    columnName: 'parent_id',
+                    foreignTableName: 'parent',
+                    deleteRule: 'RESTRICT',
+                    isNullable: false,
+                },
+            ],
+            timestamp: Date.now(),
+        };
+        const analyzer = new CascadeAnalyzer(schema);
+        const result = analyzer.analyze('parent', 10);
+
+        assert.strictEqual(result.length, 1);
+        assert.strictEqual(result[0].rowsEstimated, 0);
+        assert.strictEqual(result[0].rule, 'RESTRICT');
+    });
+
+    it('should estimate 50% rows for SET NULL rule', () => {
+        const schema: SchemaData = {
+            tables: [
+                { tableName: 'parent', rowCount: 10 },
+                { tableName: 'child', rowCount: 100 },
+            ],
+            relationships: [
+                {
+                    tableName: 'child',
+                    columnName: 'parent_id',
+                    foreignTableName: 'parent',
+                    deleteRule: 'SET NULL',
+                    isNullable: true,
+                },
+            ],
+            timestamp: Date.now(),
+        };
+        const analyzer = new CascadeAnalyzer(schema);
+        const result = analyzer.analyze('parent', 10);
+
+        assert.strictEqual(result.length, 1);
+        assert.strictEqual(result[0].rowsEstimated, 50); // 50% de 100
+        assert.strictEqual(result[0].rule, 'SET NULL');
+    });
 });

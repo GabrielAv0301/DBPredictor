@@ -9,6 +9,7 @@ export class ImpactEngine {
     public static calculate(mutation: MutationInfo, schema: SchemaData): ImpactResult {
         const tableStats = schema.tables.find((t) => t.tableName === mutation.table);
         const totalRowsInTable = tableStats?.rowCount || 0;
+        const statsLastUpdated = tableStats?.lastAutoAnalyze ?? tableStats?.lastAnalyze ?? null;
 
         let baseRowsAffected: number;
         let estimationQuality: EstimationQuality;
@@ -49,6 +50,7 @@ export class ImpactEngine {
             riskLevel,
             cascadeChain,
             willFailByRestrict,
+            statsLastUpdated,
         };
     }
 

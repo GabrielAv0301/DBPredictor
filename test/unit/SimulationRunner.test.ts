@@ -119,17 +119,17 @@ describe('SimulationRunner Unit Tests', () => {
         assert.strictEqual(mock.capturedSql, 'DELETE FROM "posts"');
     });
 
-    it('should generate UPDATE SQL for updateMany', async () => {
+    it('should generate DELETE SQL for updateMany (simulating update as delete)', async () => {
         const mock = new MockConnectionManager(true);
         await runSimulate(mock, makeImpact('products', 'updateMany'));
-        // UPDATE sets first queryParam column to itself (fallback to 'id')
-        assert.strictEqual(mock.capturedSql, 'UPDATE "products" SET "id" = "id"');
+        // UPDATE is now simulated as DELETE to capture cascades correctly
+        assert.strictEqual(mock.capturedSql, 'DELETE FROM "products"');
     });
 
-    it('should generate UPDATE SQL for update', async () => {
+    it('should generate DELETE SQL for update (simulating update as delete)', async () => {
         const mock = new MockConnectionManager(true);
         await runSimulate(mock, makeImpact('comments', 'update'));
-        assert.strictEqual(mock.capturedSql, 'UPDATE "comments" SET "id" = "id"');
+        assert.strictEqual(mock.capturedSql, 'DELETE FROM "comments"');
     });
 
     // ------------------------------------------------------------------
@@ -157,7 +157,7 @@ describe('SimulationRunner Unit Tests', () => {
     it('should accept mixed-case table name', async () => {
         const mock = new MockConnectionManager(true);
         await runSimulate(mock, makeImpact('MyApp_Table_v2', 'updateMany'));
-        assert.strictEqual(mock.capturedSql, 'UPDATE "MyApp_Table_v2" SET "id" = "id"');
+        assert.strictEqual(mock.capturedSql, 'DELETE FROM "MyApp_Table_v2"');
     });
 
     // ------------------------------------------------------------------
@@ -204,10 +204,7 @@ describe('SimulationRunner Unit Tests', () => {
             mock,
             makeImpact('users', 'update', [{ column: 'active', value: false }])
         );
-        assert.strictEqual(
-            mock.capturedSql,
-            'UPDATE "users" SET "active" = "active" WHERE "active" = $1'
-        );
+        assert.strictEqual(mock.capturedSql, 'DELETE FROM "users" WHERE "active" = $1');
         assert.deepStrictEqual(mock.capturedParams, [false]);
     });
 
@@ -221,19 +218,16 @@ describe('SimulationRunner Unit Tests', () => {
         assert.deepStrictEqual(mock.capturedParams, [null]);
     });
 
-    it('should use first queryParam column for UPDATE SET clause', async () => {
+    it('should build WHERE clause for UPDATE when queryParams provided', async () => {
         const mock = new MockConnectionManager(true);
         await runSimulate(
             mock,
             makeImpact('users', 'updateMany', [{ column: 'email', value: 'x' }])
         );
-        assert.strictEqual(
-            mock.capturedSql,
-            'UPDATE "users" SET "email" = "email" WHERE "email" = $1'
-        );
+        assert.strictEqual(mock.capturedSql, 'DELETE FROM "users" WHERE "email" = $1');
     });
 
-    it('should append WHERE clause to UPDATE when queryParams provided', async () => {
+    it('should append multi-column WHERE clause to simulated UPDATE', async () => {
         const mock = new MockConnectionManager(true);
         await runSimulate(
             mock,
@@ -244,9 +238,27 @@ describe('SimulationRunner Unit Tests', () => {
         );
         assert.strictEqual(
             mock.capturedSql,
-            'UPDATE "users" SET "email" = "email" WHERE "email" = $1 AND "id" = $2'
+            'DELETE FROM "users" WHERE "email" = $1 AND "id" = $2'
         );
         assert.deepStrictEqual(mock.capturedParams, ['x', 99]);
+    });
+
+    // ------------------------------------------------------------------
+    // warnCascade for UPDATE
+    // ------------------------------------------------------------------
+
+    it('should return warnCascade for UPDATE operations with cascade chain', async () => {
+        const mock = new MockConnectionManager(true);
+        const impact = makeImpact('users', 'updateMany', [{ column: 'id', value: 1 }]);
+        impact.cascadeChain = [
+            { table: 'posts', rowsEstimated: 2, rule: 'CASCADE', children: [] },
+        ];
+
+        const result = await runSimulate(mock, impact);
+        assert.strictEqual(
+            result.warnCascade,
+            'UPDATE cannot trigger DELETE cascades. Cascade estimation is informational.'
+        );
     });
 
     // ------------------------------------------------------------------
@@ -531,7 +543,6 @@ describe('SimulationRunner Unit Tests', () => {
 
     it('should have SIMULATION_TIMEOUT_MS set to 15000', () => {
         // Access through the static constant — verify the value is as documented
-        // We access via a small wrapper that reflects the value through simulate()
         assert.strictEqual(
             (SimulationRunner as unknown as { SIMULATION_TIMEOUT_MS: number })
                 .SIMULATION_TIMEOUT_MS,

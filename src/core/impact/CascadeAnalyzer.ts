@@ -12,7 +12,6 @@ export class CascadeAnalyzer {
         if (visited.has(tableName)) return [];
         visited.add(tableName);
 
-        // Find FKs pointing TO the current table (impacted by delete/update)
         const relations = this.schema.relationships.filter((r) => r.foreignTableName === tableName);
         const results: CascadeResult[] = [];
 
@@ -22,11 +21,21 @@ export class CascadeAnalyzer {
             const tableStats = this.schema.tables.find((t) => t.tableName === rel.tableName);
             const totalRows = tableStats?.rowCount || 0;
 
-            // Estimation: if we delete 10% of users, we roughly impact 10% of sessions
-            // This is a naive estimation for v1.0 as per roadmap
-            const estimatedImpact = Math.ceil(
-                (rowsAffected / (this.getTableCount(tableName) || 1)) * totalRows
-            );
+            let estimatedImpact: number;
+            if (rel.deleteRule === 'CASCADE') {
+                estimatedImpact = Math.ceil(
+                    (rowsAffected / (this.getTableCount(tableName) || 1)) * totalRows
+                );
+            } else if (rel.deleteRule === 'SET NULL') {
+                // Solo las filas donde la FK actual tiene un valor (no NULL) serán afectadas
+                // Por defecto estimamos 50% si no sabemos la proporción real de nulos.
+                // TODO: Podríamos consultar information_schema para obtener stats de nulabilidad.
+                estimatedImpact = Math.ceil(totalRows * 0.5);
+            } else {
+                // RESTRICT / NO ACTION: el impacto directo es 0;
+                // el efecto es que la operación puede FALLAR, no que borre filas.
+                estimatedImpact = 0;
+            }
 
             results.push({
                 table: rel.tableName,

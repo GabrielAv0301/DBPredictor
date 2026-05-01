@@ -47,4 +47,27 @@ export class HistoryManager {
     public clear() {
         this.context.globalState.update(HistoryManager.STORAGE_KEY, []);
     }
+
+    public exportToJSON(): string {
+        const history = this.getHistory();
+        return JSON.stringify(history, null, 2);
+    }
+
+    public exportToCSV(): string {
+        const headers =
+            'id,timestamp,table,operation,riskLevel,baseRowsAffected,totalRowsAffected,fileName\n';
+        const rows = this.getHistory().map((e) =>
+            [
+                e.id,
+                new Date(e.timestamp).toISOString(),
+                e.impact.table,
+                e.impact.operation,
+                e.impact.riskLevel,
+                e.impact.baseRowsAffected,
+                e.impact.totalRowsAffected,
+                `"${e.fileName}"`,
+            ].join(',')
+        );
+        return headers + rows.join('\n');
+    }
 }

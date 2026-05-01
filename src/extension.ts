@@ -14,6 +14,8 @@ import { HistoryManager } from './core/impact/HistoryManager';
 import { ImpactPanelManager } from './webview/ImpactPanelManager';
 import { SimulationRunner } from './core/db/SimulationRunner';
 import { ImpactResult } from './core/impact/types';
+import { ConnectionProfileManager } from './config/ConnectionProfile';
+import { DiagnosticProvider } from './providers/DiagnosticProvider';
 
 export async function activate(context: vscode.ExtensionContext) {
     Logger.init();
@@ -34,6 +36,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const drizzleDetector = new DrizzleDetector();
     const codeLensProvider = new CodeLensProvider();
     const historyManager = new HistoryManager(context);
+    const diagnosticProvider = new DiagnosticProvider();
 
     // Register CodeLens providers
     context.subscriptions.push(
@@ -45,17 +48,27 @@ export async function activate(context: vscode.ExtensionContext) {
                 { language: 'javascriptreact', scheme: 'file' },
             ],
             codeLensProvider
+        ),
+        vscode.languages.registerCodeActionsProvider(
+            [
+                { language: 'typescript', scheme: 'file' },
+                { language: 'typescriptreact', scheme: 'file' },
+                { language: 'javascript', scheme: 'file' },
+                { language: 'javascriptreact', scheme: 'file' },
+            ],
+            diagnosticProvider
         )
     );
 
-    // Listen for configuration changes to refresh CodeLenses
+    // Listen for configuration changes to refresh CodeLenses and Diagnostics
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((e) => {
             if (
                 e.affectsConfiguration('queryguard.showCodeLens') ||
                 e.affectsConfiguration('queryguard.enabled')
             ) {
-                // Force re-analysis to update CodeLenses
+                diagnosticProvider.clear();
+                // Force re-analysis to update CodeLenses and Diagnostics
                 if (vscode.window.activeTextEditor) {
                     analyzeDocument(vscode.window.activeTextEditor.document);
                 }
@@ -76,6 +89,10 @@ export async function activate(context: vscode.ExtensionContext) {
     connManager.setOnError((error) => {
         statusBar.update();
         vscode.window.showErrorMessage(`QueryGuard: Database connection error. ${error}`);
+    });
+
+    connManager.setOnConnectionStatusChange((isConnected) => {
+        ImpactPanelManager.currentPanel?.sendConnectionStatus(isConnected);
     });
 
     // AST Document Analysis
@@ -107,6 +124,7 @@ export async function activate(context: vscode.ExtensionContext) {
             }
 
             codeLensProvider.setMutations(document.uri.toString(), allMutations);
+            diagnosticProvider.update(document);
         } catch (error) {
             Logger.error('AST Detection failed', error);
         }
@@ -146,30 +164,89 @@ export async function activate(context: vscode.ExtensionContext) {
     // --- Extension Commands ---
 
     const connectCmd = vscode.commands.registerCommand('queryguard.connect', async () => {
-        const connectionString = await vscode.window.showInputBox({
-            prompt: 'Enter your database connection string',
-            placeHolder: 'postgresql://user:password@host:port/database',
-            password: true,
-            ignoreFocusOut: true,
+        const profiles = await ConnectionProfileManager.list(context);
+        const choices = ['New connection...'];
+        profiles.forEach((p) => choices.push(`Switch to: ${p.name}`));
+        if (profiles.length > 0) {
+            choices.push('Delete a profile...');
+        }
+
+        const selected = await vscode.window.showQuickPick(choices, {
+            placeHolder: 'QueryGuard: Connect to database',
         });
 
-        if (connectionString) {
-            try {
-                await SecretsManager.getInstance().saveConnectionString(connectionString);
-                const result = await connManager.connect(connectionString);
+        if (!selected) return;
+
+        if (selected === 'New connection...') {
+            const connectionString = await vscode.window.showInputBox({
+                prompt: 'Enter your database connection string',
+                placeHolder: 'postgresql://user:password@host:port/database',
+                password: true,
+                ignoreFocusOut: true,
+            });
+
+            if (connectionString) {
+                const name = await vscode.window.showInputBox({
+                    prompt: 'Enter a name for this connection profile',
+                    placeHolder: 'e.g., Production, Staging, Local',
+                    ignoreFocusOut: true,
+                });
+
+                if (name) {
+                    await ConnectionProfileManager.save(context, {
+                        name,
+                        connectionString,
+                        sslMode: 'auto',
+                        createdAt: Date.now(),
+                    });
+                }
+
+                try {
+                    await SecretsManager.getInstance().saveConnectionString(connectionString);
+                    const result = await connManager.connect(connectionString);
+                    if (result.success) {
+                        vscode.window.showInformationMessage(
+                            `QueryGuard: Connected to ${name || 'database'}.`
+                        );
+                        if (vscode.window.activeTextEditor) {
+                            analyzeDocument(vscode.window.activeTextEditor.document);
+                        }
+                    } else {
+                        vscode.window.showErrorMessage(
+                            `QueryGuard: Connection failed. ${result.error || 'Check logs for details.'}`
+                        );
+                    }
+                    statusBar.update();
+                } catch (error) {
+                    Logger.error('Failed to save connection string or connect', error);
+                }
+            }
+        } else if (selected.startsWith('Switch to: ')) {
+            const profileName = selected.replace('Switch to: ', '');
+            const profile = profiles.find((p) => p.name === profileName);
+            if (profile) {
+                await SecretsManager.getInstance().saveConnectionString(profile.connectionString);
+                const result = await connManager.connect(profile.connectionString);
                 if (result.success) {
-                    vscode.window.showInformationMessage('QueryGuard: Connected to database.');
+                    vscode.window.showInformationMessage(`QueryGuard: Connected to '${profileName}'.`);
+                    statusBar.update();
                     if (vscode.window.activeTextEditor) {
                         analyzeDocument(vscode.window.activeTextEditor.document);
                     }
                 } else {
                     vscode.window.showErrorMessage(
-                        `QueryGuard: Connection failed. ${result.error || 'Check logs for details.'}`
+                        `QueryGuard: Connection to '${profileName}' failed. ${result.error}`
                     );
                 }
-                statusBar.update();
-            } catch (error) {
-                Logger.error('Failed to save connection string or connect', error);
+            }
+        } else if (selected === 'Delete a profile...') {
+            const toDelete = await vscode.window.showQuickPick(
+                profiles.map((p) => p.name),
+                { placeHolder: 'Select a profile to delete' }
+            );
+            if (toDelete) {
+                await ConnectionProfileManager.delete(context, toDelete);
+                vscode.window.showInformationMessage(`QueryGuard: Profile '${toDelete}' deleted.`);
             }
         }
     });
@@ -222,15 +299,24 @@ export async function activate(context: vscode.ExtensionContext) {
                     if (result.error) {
                         vscode.window.showErrorMessage(`Simulation failed: ${result.error}`);
                     } else {
-                        vscode.window.showInformationMessage(
-                            `Simulation complete: ${result.rowCount} rows affected. No data was modified.`
+                        const baseMsg = `Simulation complete: ${result.rowCount} rows affected. No data was modified.`;
+                        const fullMsg = result.warnCascade
+                            ? `${baseMsg} (${result.warnCascade})`
+                            : baseMsg;
+                        vscode.window.showInformationMessage(fullMsg);
+                        ImpactPanelManager.currentPanel?.updateSimulationResult(
+                            result.rowCount,
+                            result.warnCascade
                         );
-                        ImpactPanelManager.currentPanel?.updateSimulationResult(result.rowCount);
                     }
                 }
             );
         }
     );
+
+    const showLogsCmd = vscode.commands.registerCommand('queryguard.showLogs', () => {
+        Logger.show();
+    });
 
     context.subscriptions.push(
         connectCmd,
@@ -238,6 +324,7 @@ export async function activate(context: vscode.ExtensionContext) {
         refreshSchemaCmd,
         showImpactPanelCmd,
         simulateCmd,
+        showLogsCmd,
         { dispose: () => statusBar.dispose() }
     );
 }

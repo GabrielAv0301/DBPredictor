@@ -42,8 +42,8 @@ QueryGuard is designed as a complementary safety layer for your development work
 - **ORM Support**:
     - **Supabase**: .from().delete() and .from().update() chains.
     - **Prisma**: delete, update, deleteMany, and updateMany.
-    - **Drizzle ORM**: delete(), update(), and insert().
-- **Simulation Note**: While detection is automatic, the Simulation feature requires explicit filters (like .eq() or where: {}) to accurately translate your ORM logic into safe test SQL.
+    - **Drizzle ORM**: delete() and update() (with and without .where()). The insert() operation is non-destructive and therefore not detected as a risk mutation.
+- **Simulation Note**: While detection is automatic, the Simulation feature requires explicit filters (like .eq() or where: {}) to accurately translate your ORM logic into safe test SQL. Additionally, for UPDATE operations, the simulation executes DELETE in a ROLLBACK to capture the actual row count for SET NULL/RESTRICT cascades — the visual cascade estimation for UPDATE is informational only.
 
 ### Configuration Reference
 
@@ -52,8 +52,8 @@ You can customize QueryGuard behavior in your VS Code `settings.json`:
 - `queryguard.enabled`: (boolean) Enable or disable real-time analysis. Default: `true`.
 - `queryguard.showCodeLens`: (boolean) Show inline impact estimations. Default: `true`.
 - `queryguard.sslMode`: (string) SSL connection mode (`auto`, `disable`, `require`, `verify-ca`, `verify-full`). Default: `auto`.
-- `queryguard.analysisDebounce`: (number) Delay in milliseconds before re-analyzing code. Default: `750`.
-- `queryguard.cacheTTL`: (number) Schema cache time-to-live in seconds. Default: `300`.
+- `queryguard.analysisDebounce`: (number) Delay in milliseconds before re-analyzing code. Range: 100–10000ms. Default: `750`.
+- `queryguard.cacheTTL`: (number) Schema cache time-to-live in seconds. Range: 30–86400s. Default: `300`.
 
 ### Architecture
 
@@ -99,8 +99,8 @@ QueryGuard está diseñado como una capa de seguridad complementaria para tu flu
 - **ORMs Soportados**:
     - **Supabase**: Cadenas .from().delete() and .from().update().
     - **Prisma**: Soporte para delete, update, deleteMany y updateMany.
-    - **Drizzle ORM**: Detección de delete(), update() e insert().
-- **Nota de Simulación**: Aunque la detección es automática, la función de Simulación requiere filtros explícitos (como .eq() o where: {}) para traducir con precisión la lógica de tu ORM al SQL de prueba seguro.
+    - **Drizzle ORM**: delete() y update() (con y sin .where()). La operación insert() no es destructiva y por tanto no se detecta como mutación de riesgo.
+- **Nota de Simulación**: Aunque la detección es automática, la función de Simulación requiere filtros explícitos (como .eq() o where: {}) para traducir con precisión la lógica de tu ORM al SQL de prueba seguro. Además, para operaciones UPDATE, la simulación ejecuta DELETE en un ROLLBACK para capturar el conteo real de filas de cascadas SET NULL/RESTRICT — la estimación visual de cascadas para UPDATE es solo informativa.
 
 ---
 

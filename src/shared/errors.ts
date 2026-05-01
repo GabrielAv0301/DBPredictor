@@ -11,6 +11,7 @@ export enum ErrorCode {
     SCHEMA_FETCH_FAILED = 'SCHEMA_FETCH_FAILED',
     WORKER_ERROR = 'WORKER_ERROR',
     INVALID_IDENTIFIER = 'INVALID_IDENTIFIER',
+    SIMULATION_CASCADE_LIMITATION = 'SIMULATION_CASCADE_LIMITATION',
 }
 
 export class QueryGuardError extends Error {
@@ -36,6 +37,8 @@ export class QueryGuardError extends Error {
                 return 'Simulation timed out. The query might be too complex for a safe dry-run.';
             case ErrorCode.INVALID_IDENTIFIER:
                 return `Security Alert: ${this.message}`;
+            case ErrorCode.SIMULATION_CASCADE_LIMITATION:
+                return 'Simulation note: UPDATE operations cannot trigger DELETE cascades. Cascade analysis is informational only for UPDATE. Use the exact simulation for DELETE operations.';
             default:
                 return `An error occurred (${this.code}): ${this.message}`;
         }

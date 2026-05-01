@@ -1,14 +1,15 @@
 import React from 'react';
 import { HistoryEntry } from '../types/shared';
 import { RiskBadge } from './RiskBadge';
-import { Clock, Trash2, FileText } from 'lucide-react';
+import { Clock, Trash2, FileText, Download } from 'lucide-react';
 
 interface HistoryViewProps {
     history: HistoryEntry[];
     onClear: () => void;
+    onExport: (format: 'json' | 'csv') => void;
 }
 
-export const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) => {
+export const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear, onExport }) => {
     if (history.length === 0) {
         return (
             <div style={{ textAlign: 'center', opacity: 0.6, padding: '40px' }}>
@@ -27,21 +28,51 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear }) =>
                 <h2 className="subtitle" style={{ fontWeight: 'bold' }}>
                     RECENT ANALYSES
                 </h2>
-                <button
-                    onClick={onClear}
-                    style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--vscode-errorForeground)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '0.8rem',
-                    }}
-                >
-                    <Trash2 size={14} /> Clear
-                </button>
+                <div className="flex-row" style={{ gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                            className="secondary-button"
+                            onClick={() => onExport('json')}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.7rem',
+                                padding: '4px 8px',
+                            }}
+                        >
+                            <Download size={12} /> JSON
+                        </button>
+                        <button
+                            className="secondary-button"
+                            onClick={() => onExport('csv')}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.7rem',
+                                padding: '4px 8px',
+                            }}
+                        >
+                            <Download size={12} /> CSV
+                        </button>
+                    </div>
+                    <button
+                        onClick={onClear}
+                        style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--vscode-errorForeground)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.8rem',
+                        }}
+                    >
+                        <Trash2 size={14} /> Clear
+                    </button>
+                </div>
             </div>
 
             {history.map((entry) => (

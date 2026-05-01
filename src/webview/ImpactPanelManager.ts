@@ -37,8 +37,22 @@ export class ImpactPanelManager {
                         this.historyManager.clear();
                         this.sendHistory();
                         break;
+                    case 'EXPORT_HISTORY': {
+                        const data =
+                            message.format === 'json'
+                                ? this.historyManager.exportToJSON()
+                                : this.historyManager.exportToCSV();
+                        vscode.env.clipboard.writeText(data);
+                        vscode.window.showInformationMessage(
+                            `QueryGuard: History exported to clipboard as ${message.format.toUpperCase()}.`
+                        );
+                        break;
+                    }
                     case 'SIMULATE':
                         vscode.commands.executeCommand('queryguard.simulate', message.data);
+                        break;
+                    case 'RECONNECT_PROMPT':
+                        vscode.commands.executeCommand('queryguard.connect');
                         break;
                 }
             },
@@ -87,8 +101,15 @@ export class ImpactPanelManager {
         this._panel.webview.postMessage({ type: 'UPDATE_IMPACT', data: impact });
     }
 
-    public updateSimulationResult(rowCount: number, error?: string) {
-        this._panel.webview.postMessage({ type: 'SIMULATION_RESULT', rowCount, error });
+    public updateSimulationResult(rowCount: number, warnCascade?: string, error?: string) {
+        this._panel.webview.postMessage({ type: 'SIMULATION_RESULT', rowCount, warnCascade, error });
+    }
+
+    public sendConnectionStatus(isConnected: boolean) {
+        this._panel.webview.postMessage({
+            type: 'CONNECTION_STATUS',
+            data: { isConnected },
+        });
     }
 
     public sendHistory() {

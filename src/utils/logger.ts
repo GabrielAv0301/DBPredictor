@@ -1,7 +1,17 @@
-import * as vscode from 'vscode';
+import * as vscodeModule from 'vscode';
+
+// Handle cases where vscode might not be available (e.g., in worker threads)
+let vscode: typeof vscodeModule | undefined;
+try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    vscode = require('vscode');
+} catch {
+    vscode = undefined;
+}
 
 export class Logger {
-    private static channel: vscode.OutputChannel;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private static channel: any;
     private static sensitiveKeys = [
         'password',
         'secret',
@@ -12,7 +22,7 @@ export class Logger {
     ];
 
     public static init() {
-        if (!this.channel) {
+        if (!this.channel && vscode?.window) {
             this.channel = vscode.window.createOutputChannel('QueryGuard');
         }
     }
@@ -52,15 +62,29 @@ export class Logger {
     }
 
     private static log(level: string, message: string, data?: unknown) {
-        if (!this.channel) {
-            this.init();
-        }
         const timestamp = new Date().toISOString();
         const dataStr = data ? ` | ${this.safeStringify(data)}` : '';
-        this.channel.appendLine(`[${timestamp}] [${level}] ${message}${dataStr}`);
+        const fullMessage = `[${timestamp}] [${level}] ${message}${dataStr}`;
+
+        if (this.channel) {
+            this.channel.appendLine(fullMessage);
+        } else {
+            if (level === 'ERROR') {
+                // eslint-disable-next-line no-console
+                console.error(fullMessage);
+            } else if (level === 'WARN') {
+                // eslint-disable-next-line no-console
+                console.warn(fullMessage);
+            } else {
+                // eslint-disable-next-line no-console
+                console.log(fullMessage);
+            }
+        }
     }
 
     public static show() {
-        this.channel.show();
+        if (this.channel) {
+            this.channel.show();
+        }
     }
 }

@@ -6,6 +6,7 @@ import { SqlParam } from './types';
 export interface SimulationResult {
     rowCount: number;
     error?: string;
+    warnCascade?: string;
 }
 
 export class SimulationRunner {
@@ -17,7 +18,7 @@ export class SimulationRunner {
             return { rowCount: 0, error: 'Database not connected' };
         }
 
-        const { sql, params, error } = this.generateSimulationSql(impact);
+        const { sql, params, error, warnCascade } = this.generateSimulationSql(impact);
         if (error || !sql) {
             return { rowCount: 0, error: error || 'Could not generate simulation SQL.' };
         }
@@ -43,7 +44,7 @@ export class SimulationRunner {
             conn.setOnSimulationResult((rowCount, error) => {
                 clearTimeout(timeout);
                 conn.setOnSimulationResult(undefined);
-                resolve({ rowCount, error });
+                resolve({ rowCount, error, warnCascade });
             });
 
             Logger.info('Starting secure simulation', { sql, params });
@@ -56,6 +57,7 @@ export class SimulationRunner {
         sql: string | null;
         params: SqlParam[];
         error?: string;
+        warnCascade?: string;
     } {
         const table = impact.table;
         const op = impact.operation;
@@ -93,13 +95,21 @@ export class SimulationRunner {
         }
 
         let sql: string | null = null;
+        let warnCascade: string | undefined;
+
         if (op === 'deleteMany' || op === 'delete') {
             sql = `DELETE FROM ${safeTable}${whereClause}`;
         } else if (op === 'updateMany' || op === 'update') {
-            // Use a harmless operation that triggers cascades/triggers and returns rowCount
-            sql = `UPDATE ${safeTable} SET "${impact.queryParams?.[0]?.column || 'id'}" = "${impact.queryParams?.[0]?.column || 'id'}"${whereClause}`;
+            // Para UPDATE, usamos el mismo DELETE para simular porque un UPDATE
+            // no dispara ON DELETE CASCADE (solo ON UPDATE CASCADE).
+            // Esto nos da el rowCount real incluyendo filas afectadas por SET NULL / RESTRICT.
+            if (impact.cascadeChain.length > 0) {
+                warnCascade =
+                    'UPDATE cannot trigger DELETE cascades. Cascade estimation is informational.';
+            }
+            sql = `DELETE FROM ${safeTable}${whereClause}`;
         }
 
-        return { sql, params };
+        return { sql, params, warnCascade };
     }
 }

@@ -12,7 +12,17 @@
         "moduleResolution": "Node16",
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "baseUrl": ".",
+        "paths": {
+            "@core/*": ["src/core/*"],
+            "@config/*": ["src/config/*"],
+            "@shared/*": ["src/shared/*"],
+            "@providers/*": ["src/providers/*"],
+            "@utils/*": ["src/utils/*"],
+            "@webview/*": ["src/webview/*"]
+        }
     },
     "include": ["src/**/*"],
     "exclude": ["node_modules", ".vscode-test", "webview-ui", "test"]
