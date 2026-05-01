@@ -53,13 +53,21 @@
                     "type": "string",
                     "default": "auto",
                     "description": "SSL/TLS mode for database connections: auto (default), disable, require, verify-ca, verify-full.",
-                    "enum": [
-                        "auto",
-                        "disable",
-                        "require",
-                        "verify-ca",
-                        "verify-full"
-                    ]
+                    "enum": ["auto", "disable", "require", "verify-ca", "verify-full"]
+                },
+                "queryguard.analysisDebounce": {
+                    "type": "integer",
+                    "default": 750,
+                    "minimum": 100,
+                    "maximum": 10000,
+                    "description": "Delay in milliseconds before re-analyzing code after changes. Range: 100–10000ms. Default: 750."
+                },
+                "queryguard.cacheTTL": {
+                    "type": "integer",
+                    "default": 300,
+                    "minimum": 30,
+                    "maximum": 86400,
+                    "description": "Schema cache time-to-live in seconds. Range: 30–86400s (1 day max). Default: 300."
                 }
             }
         },
@@ -88,6 +96,32 @@
                 "command": "queryguard.simulate",
                 "title": "QueryGuard: Run Safe Simulation",
                 "icon": "$(zap)"
+            }
+        ],
+        "keybindings": [
+            {
+                "command": "queryguard.connect",
+                "key": "ctrl+shift+d c",
+                "mac": "cmd+shift+d c",
+                "when": "editorTextFocus"
+            },
+            {
+                "command": "queryguard.simulate",
+                "key": "ctrl+shift+d s",
+                "mac": "cmd+shift+d s",
+                "when": "editorTextFocus"
+            },
+            {
+                "command": "queryguard.refreshSchema",
+                "key": "ctrl+shift+d r",
+                "mac": "cmd+shift+d r",
+                "when": "editorTextFocus"
+            },
+            {
+                "command": "queryguard.showLogs",
+                "key": "ctrl+shift+d l",
+                "mac": "cmd+shift+d l",
+                "when": "editorTextFocus"
             }
         ]
     },
