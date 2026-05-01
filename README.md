@@ -90,8 +90,8 @@ QueryGuard está diseñado como una capa de seguridad complementaria para tu flu
 
 - **Estimación en Tiempo Real**: Utiliza estadísticas internas de PostgreSQL (n_live_tup) para cálculos instantáneos del "peor de los casos" mientras escribes.
 - **Análisis Visual de Cascadas**: Rastrea Claves Foráneas (FKs) de forma recursiva para mostrar el impacto total en tablas relacionadas.
+- **Historial y Exportación**: Mantén un registro de tus análisis en el panel lateral. Exporta tus datos a **CSV** o **JSON** (se copian al portapapeles para que los pegues directamente en Excel, Bloc de Notas o reportes).
 - **Simulación de Prueba Segura**: Ejecuta consultas reales contra datos en vivo con riesgo cero de modificación.
-- **Historial de Análisis**: Mantén un registro de estimaciones anteriores en el panel lateral.
 
 ### Requisitos Técnicos y Compatibilidad
 

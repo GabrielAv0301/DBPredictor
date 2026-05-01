@@ -2,6 +2,20 @@
 
 All notable changes to the "queryguard" extension will be documented in this file.
 
+## [1.2.0] - 2026-05-01
+
+### Added
+
+- Export history to CSV/JSON (via Clipboard).
+- Improved Blast Radius visualization with detailed bar charts.
+- Enhanced cascade tree navigation and styling.
+- New "History" tab for better session tracking.
+
+### Fixed
+
+- Safety transaction logic for `ROLLBACK` during simulations.
+- UI state persistence when switching between Analysis and History.
+
 ## [1.1.2] - 2026-04-17
 
 ### Fixed
