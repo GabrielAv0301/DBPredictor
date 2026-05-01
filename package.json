@@ -96,6 +96,11 @@
                 "command": "queryguard.simulate",
                 "title": "QueryGuard: Run Safe Simulation",
                 "icon": "$(zap)"
+            },
+            {
+                "command": "queryguard.showLogs",
+                "title": "QueryGuard: Show Logs",
+                "icon": "$(output)"
             }
         ],
         "keybindings": [
