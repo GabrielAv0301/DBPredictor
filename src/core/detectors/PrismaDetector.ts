@@ -14,6 +14,13 @@ export class PrismaDetector implements MutationDetector {
         'update',
     ];
 
+    private readonly RAW_METHODS = [
+        '$executeRaw',
+        '$executeRawUnsafe',
+        '$queryRaw',
+        '$queryRawUnsafe',
+    ];
+
     public detect(document: DocumentLike): MutationInfo[] {
         const sourceCode = document.getText();
         const sourceFile = ts.createSourceFile(
@@ -30,6 +37,15 @@ export class PrismaDetector implements MutationDetector {
                 const mutation = this.extractMutation(node, document);
                 if (mutation) {
                     mutations.push(mutation);
+                }
+                const raw = this.extractRawMutation(node, document);
+                if (raw) {
+                    mutations.push(raw);
+                }
+            } else if (ts.isTaggedTemplateExpression(node)) {
+                const raw = this.extractRawMutation(node, document);
+                if (raw) {
+                    mutations.push(raw);
                 }
             }
             ts.forEachChild(node, visit);
@@ -85,6 +101,48 @@ export class PrismaDetector implements MutationDetector {
             operation: methodName as MutationOperation,
             hasWhere,
             queryParams,
+            range: { start, end },
+            sourceText: node.getText(),
+        };
+    }
+
+    // Extraer mutaciones de Prisma Raw ($executeRaw...)
+    private extractRawMutation(
+        node: ts.CallExpression | ts.TaggedTemplateExpression,
+        document: DocumentLike
+    ): MutationInfo | null {
+        const expression = ts.isCallExpression(node) ? node.expression : node.tag;
+        if (!ts.isPropertyAccessExpression(expression)) return null;
+
+        const methodName = expression.name.text;
+        if (!this.RAW_METHODS.includes(methodName)) return null;
+
+        if (!ts.isIdentifier(expression.expression) || expression.expression.text !== 'prisma') {
+            return null;
+        }
+
+        // Intento de extraer nombre de tabla del SQL (best-effort)
+        let sqlText = '';
+        if (ts.isCallExpression(node) && node.arguments.length > 0) {
+            sqlText = node.arguments[0].getText();
+        } else if (ts.isTaggedTemplateExpression(node)) {
+            sqlText = node.template.getText();
+        }
+
+        let tableName = 'RAW_QUERY';
+        const tableMatch = sqlText.match(/(?:FROM|UPDATE|INTO)\s+["']?([a-zA-Z0-9_.]+)/i);
+        if (tableMatch) {
+            tableName = tableMatch[1];
+        }
+
+        const start = document.positionAt(node.getStart());
+        const end = document.positionAt(node.getEnd());
+
+        return {
+            table: tableName,
+            operation: 'updateMany', // Tratamos como mutación múltiple por seguridad
+            hasWhere: false,
+            queryParams: [],
             range: { start, end },
             sourceText: node.getText(),
         };

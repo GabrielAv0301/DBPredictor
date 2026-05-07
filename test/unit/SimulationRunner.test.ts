@@ -151,7 +151,7 @@ describe('SimulationRunner Unit Tests', () => {
     it('should accept dots in table name (schemas)', async () => {
         const mock = new MockConnectionManager(true);
         await runSimulate(mock, makeImpact('my_schema.users', 'deleteMany'));
-        assert.strictEqual(mock.capturedSql, 'DELETE FROM "my_schema.users"');
+        assert.strictEqual(mock.capturedSql, 'DELETE FROM "my_schema"."users"');
     });
 
     it('should accept mixed-case table name', async () => {
@@ -292,7 +292,7 @@ describe('SimulationRunner Unit Tests', () => {
         );
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("users" DROP TABLE users;--"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("users" DROP TABLE users;--"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
         assert.strictEqual(mock.capturedSql, null);
     });
@@ -305,7 +305,7 @@ describe('SimulationRunner Unit Tests', () => {
         );
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("users; DROP TABLE users;"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("users; DROP TABLE users;"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
         assert.strictEqual(mock.capturedSql, null);
     });
@@ -315,7 +315,7 @@ describe('SimulationRunner Unit Tests', () => {
         const result = await runSimulate(mock, makeImpact('users\' OR \'1\'=\'1', 'delete'));
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("users\' OR \'1\'=\'1"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("users\' OR \'1\'=\'1"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
         assert.strictEqual(mock.capturedSql, null);
     });
@@ -325,7 +325,7 @@ describe('SimulationRunner Unit Tests', () => {
         const result = await runSimulate(mock, makeImpact('users OR 1=1', 'deleteMany'));
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("users OR 1=1"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("users OR 1=1"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
     });
 
@@ -334,7 +334,7 @@ describe('SimulationRunner Unit Tests', () => {
         const result = await runSimulate(mock, makeImpact('admin--', 'deleteMany'));
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("admin--"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("admin--"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
     });
 
@@ -343,7 +343,7 @@ describe('SimulationRunner Unit Tests', () => {
         const result = await runSimulate(mock, makeImpact('users/*comment*/', 'deleteMany'));
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("users/*comment*/"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("users/*comment*/"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
     });
 
@@ -352,7 +352,7 @@ describe('SimulationRunner Unit Tests', () => {
         const result = await runSimulate(mock, makeImpact('id=1', 'deleteMany'));
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("id=1"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("id=1"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
     });
 
@@ -361,7 +361,7 @@ describe('SimulationRunner Unit Tests', () => {
         const result = await runSimulate(mock, makeImpact('users/something', 'deleteMany'));
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("users/something"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("users/something"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
     });
 
@@ -370,7 +370,7 @@ describe('SimulationRunner Unit Tests', () => {
         const result = await runSimulate(mock, makeImpact('users\\admin', 'deleteMany'));
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("users\\admin"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("users\\admin"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
     });
 
@@ -379,7 +379,7 @@ describe('SimulationRunner Unit Tests', () => {
         const result = await runSimulate(mock, makeImpact('admin users', 'deleteMany'));
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("admin users"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("admin users"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
     });
 
@@ -388,7 +388,7 @@ describe('SimulationRunner Unit Tests', () => {
         const result = await runSimulate(mock, makeImpact('\'; DROP TABLE users;--', 'deleteMany'));
         assert.strictEqual(
             result.error,
-            'Security Alert: Invalid table name detected ("\'; DROP TABLE users;--"). Only alphanumeric, underscores and dots allowed.'
+            'Security Alert: Invalid table name detected ("\'; DROP TABLE users;--"). Only alphanumeric and underscores allowed (optional one dot for schema).'
         );
         assert.strictEqual(mock.capturedSql, null);
     });

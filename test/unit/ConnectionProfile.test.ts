@@ -1,26 +1,16 @@
 import * as assert from 'assert';
 import { ConnectionProfileManager, ConnectionProfile } from '../../src/config/ConnectionProfile';
-import * as vscode from 'vscode';
+import * as vscodeMock from './vscode.mock';
 
-// Mock globalState
-class MockGlobalState {
-    private storage: Record<string, unknown> = {};
-    get<T>(key: string): T | undefined {
-        return this.storage[key] as T;
-    }
-    update(key: string, value: unknown): Promise<void> {
-        this.storage[key] = value;
-        return Promise.resolve();
-    }
-}
-
+const mockGlobalState = new vscodeMock.MockMemento();
 const mockContext = {
-    globalState: new MockGlobalState(),
-} as unknown as vscode.ExtensionContext;
+    globalState: mockGlobalState,
+} as any;
 
 describe('ConnectionProfileManager Unit Tests', () => {
     beforeEach(() => {
-        mockContext.globalState = new MockGlobalState();
+        // Clear storage between tests
+        (mockGlobalState as any).storage = new Map();
     });
 
     it('should list empty profiles initially', async () => {

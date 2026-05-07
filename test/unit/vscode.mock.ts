@@ -52,14 +52,24 @@ export const TextEditorRevealType = {
     AtTop: 3,
 } as const;
 
+export interface Uri {
+    fsPath: string;
+    toString(): string;
+}
+
 export const Uri = {
     file: (path: string) => ({ fsPath: path, toString: () => path }),
     parse: (url: string) => ({ toString: () => url }),
+    joinPath: (base: Uri, ...pathSegments: string[]) => ({
+        fsPath: base.fsPath + (base.fsPath.endsWith('/') ? '' : '/') + pathSegments.join('/'),
+        toString: () => base.toString() + (base.toString().endsWith('/') ? '' : '/') + pathSegments.join('/'),
+    }),
 };
 
 export const window = {
     showInformationMessage: () => Promise.resolve(),
     showErrorMessage: () => Promise.resolve(),
+    showWarningMessage: () => Promise.resolve(),
     withProgress: (
         _options: unknown,
         task: (progress: { report: (value: { message?: string }) => void }) => Promise<unknown>
@@ -68,6 +78,18 @@ export const window = {
         appendLine: () => {},
         show: () => {},
         clear: () => {},
+    }),
+    activeTextEditor: undefined as any,
+    createWebviewPanel: () => ({
+        webview: {
+            onDidReceiveMessage: () => ({ dispose: () => {} }),
+            postMessage: () => Promise.resolve(),
+            asWebviewUri: (uri: Uri) => uri,
+            cspSource: 'vscode-resource:',
+        },
+        onDidDispose: () => ({ dispose: () => {} }),
+        reveal: () => {},
+        dispose: () => {},
     }),
 };
 
@@ -80,10 +102,52 @@ export const workspace = {
     getConfiguration: () => ({
         get: () => undefined,
     }),
+    onDidChangeConfiguration: () => ({ dispose: () => {} }),
+    onDidChangeTextDocument: () => ({ dispose: () => {} }),
 };
 
+export interface Memento {
+    get<T>(key: string): T | undefined;
+    get<T>(key: string, defaultValue: T): T;
+    update(key: string, value: any): Thenable<void>;
+}
+
+export class MockMemento implements Memento {
+    private storage = new Map<string, any>();
+    get(key: string, defaultValue?: any) {
+        return this.storage.get(key) ?? defaultValue;
+    }
+    update(key: string, value: any) {
+        this.storage.set(key, value);
+        return Promise.resolve();
+    }
+    setKeysForSync() {}
+}
+
+export interface SecretStorage {
+    get(key: string): Thenable<string | undefined>;
+    store(key: string, value: string): Thenable<void>;
+    delete(key: string): Thenable<void>;
+}
+
+export class MockSecretStorage implements SecretStorage {
+    private secrets = new Map<string, string>();
+    get(key: string) { return Promise.resolve(this.secrets.get(key)); }
+    store(key: string, value: string) { this.secrets.set(key, value); return Promise.resolve(); }
+    delete(key: string) { this.secrets.delete(key); return Promise.resolve(); }
+}
+
+export interface ExtensionContext {
+    globalState: Memento & { setKeysForSync(keys: string[]): void };
+    workspaceState: Memento;
+    secrets: SecretStorage;
+    extensionUri: Uri;
+    extensionPath: string;
+    subscriptions: { dispose(): any }[];
+}
+
 export interface TextDocument {
-    uri: { toString(): string };
+    uri: Uri;
     fileName: string;
     languageId: string;
     version: number;

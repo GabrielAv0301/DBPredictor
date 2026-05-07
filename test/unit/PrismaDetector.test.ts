@@ -98,4 +98,14 @@ describe('PrismaDetector Unit Tests', () => {
             results[0].queryParams?.some((p) => p.column === 'status' && p.value === 'inactive')
         );
     });
+
+    it('should detect prisma raw queries and extract table name', () => {
+        const code = 'await prisma.$executeRaw`DELETE FROM users WHERE id = 1`;';
+        const doc = new MockDocument(code);
+        const results = detector.detect(doc);
+
+        assert.strictEqual(results.length, 1);
+        assert.strictEqual(results[0].table, 'users');
+        assert.strictEqual(results[0].operation, 'updateMany');
+    });
 });

@@ -64,24 +64,26 @@ export class SimulationRunner {
         const params: SqlParam[] = [];
 
         // Protection against SQL Injection in Identifiers (Tables/Columns)
-        // Allow alphanumeric, underscores, and dots for schemas.
-        const identifierRegex = /^[a-zA-Z0-9_.]+$/;
-        if (!identifierRegex.test(table)) {
+        // Allow alphanumeric and underscores. Dots are handled by splitting.
+        const partRegex = /^\w+$/;
+
+        const tableParts = table.split('.');
+        if (tableParts.length > 2 || tableParts.some((p) => !partRegex.test(p))) {
             return {
                 sql: null,
                 params: [],
-                error: `Security Alert: Invalid table name detected ("${table}"). Only alphanumeric, underscores and dots allowed.`,
+                error: `Security Alert: Invalid table name detected ("${table}"). Only alphanumeric and underscores allowed (optional one dot for schema).`,
             };
         }
 
-        const safeTable = `"${table}"`;
+        const safeTable = tableParts.map((p) => `"${p}"`).join('.');
 
         // Build parameterized WHERE clause if filters exist
         let whereClause = '';
         if (impact.hasWhere && impact.queryParams) {
             const conditions: string[] = [];
             for (const p of impact.queryParams) {
-                if (!identifierRegex.test(p.column)) {
+                if (!partRegex.test(p.column)) {
                     return {
                         sql: null,
                         params: [],
