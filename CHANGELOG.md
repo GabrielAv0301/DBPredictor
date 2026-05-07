@@ -2,6 +2,19 @@
 
 All notable changes to the "queryguard" extension will be documented in this file.
 
+## [1.2.1] - 2026-05-07
+
+### Added
+
+- Upgraded to TypeScript 6.0.3 for better performance and type safety.
+- Added explicit support for Node.js 20 in CI/CD pipeline.
+
+### Fixed
+
+- **Critical Security Fixes**: Resolved 4 vulnerabilities (RCE and DoS) in dependencies (`esbuild`, `diff`, `serialize-javascript`).
+- Fixed ESLint configuration and resolved all linting warnings in the test suite.
+- Corrected `tsconfig.json` deprecation warnings for `baseUrl`.
+
 ## [1.2.0] - 2026-05-01
 
 ### Added
