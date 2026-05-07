@@ -5,12 +5,15 @@ import * as vscodeMock from './vscode.mock';
 const mockGlobalState = new vscodeMock.MockMemento();
 const mockContext = {
     globalState: mockGlobalState,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
 } as any;
 
 describe('ConnectionProfileManager Unit Tests', () => {
     beforeEach(() => {
         // Clear storage between tests
-        (mockGlobalState as any).storage = new Map();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const storage = (mockGlobalState as any).storage;
+        storage.clear();
     });
 
     it('should list empty profiles initially', async () => {

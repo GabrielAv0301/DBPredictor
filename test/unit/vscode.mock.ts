@@ -79,7 +79,7 @@ export const window = {
         show: () => {},
         clear: () => {},
     }),
-    activeTextEditor: undefined as any,
+    activeTextEditor: undefined as unknown,
     createWebviewPanel: () => ({
         webview: {
             onDidReceiveMessage: () => ({ dispose: () => {} }),
@@ -109,15 +109,15 @@ export const workspace = {
 export interface Memento {
     get<T>(key: string): T | undefined;
     get<T>(key: string, defaultValue: T): T;
-    update(key: string, value: any): Thenable<void>;
+    update(key: string, value: unknown): Thenable<void>;
 }
 
 export class MockMemento implements Memento {
-    private storage = new Map<string, any>();
-    get(key: string, defaultValue?: any) {
+    private storage = new Map<string, unknown>();
+    get(key: string, defaultValue?: unknown) {
         return this.storage.get(key) ?? defaultValue;
     }
-    update(key: string, value: any) {
+    update(key: string, value: unknown) {
         this.storage.set(key, value);
         return Promise.resolve();
     }
@@ -143,7 +143,7 @@ export interface ExtensionContext {
     secrets: SecretStorage;
     extensionUri: Uri;
     extensionPath: string;
-    subscriptions: { dispose(): any }[];
+    subscriptions: { dispose(): void }[];
 }
 
 export interface TextDocument {

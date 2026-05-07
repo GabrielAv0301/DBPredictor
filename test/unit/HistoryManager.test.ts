@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import * as assert from 'assert';
 import { HistoryManager } from '../../src/core/impact/HistoryManager';
 import { ImpactResult } from '../../src/core/impact/types';
@@ -10,7 +11,7 @@ describe('HistoryManager Unit Tests', () => {
     beforeEach(() => {
         const mockGlobalState = new vscodeMock.MockMemento();
         mockContext = {
-            globalState: mockGlobalState as any,
+            globalState: mockGlobalState,
             workspaceState: new vscodeMock.MockMemento(),
             secrets: new vscodeMock.MockSecretStorage(),
             extensionUri: vscodeMock.Uri.file('/test'),
@@ -34,9 +35,7 @@ describe('HistoryManager Unit Tests', () => {
         willFailByRestrict: false,
     };
 
-    const mockDocument = {
-        fileName: 'test.ts',
-    } as any;
+    const mockDocument = { fileName: 'test.ts' } as any;
 
     it('should save and retrieve history', () => {
         historyManager.save(mockImpact, mockDocument);

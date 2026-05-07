@@ -1,0 +1,10 @@
+{
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "typescript.preferences.includePackageJsonAutoImports": false,
+    "typescript.inlayHints.functionLikeReturnTypes.enabled": false,
+    "typescript.inlayHints.parameterTypes.enabled": false,
+    "[typescript]": {
+        "editor.defaultFoldingStrategy": "indentation"
+    }
+}
