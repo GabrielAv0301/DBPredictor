@@ -1,0 +1,98 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uidField) {
+      return isAuthenticated() && uidField == request.auth.uid;
+    }
+
+    function hasOnlyApprovalKeys() {
+      return request.resource.data.keys().hasOnly([
+        'approvalId',
+        'receiptId',
+        'operatorUid',
+        'createdBy',
+        'status',
+        'reason',
+        'createdAt'
+      ]);
+    }
+
+    function isValidApprovalCreate() {
+      return hasOnlyApprovalKeys()
+        && request.resource.data.approvalId is string
+        && request.resource.data.receiptId is string
+        && request.resource.data.operatorUid is string
+        && request.resource.data.createdBy is string
+        && request.resource.data.status in ['pending', 'draft']
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() <= 1000
+        && request.resource.data.createdAt == request.time;
+    }
+
+    // Default closed: deny all access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Receipts: readable by authenticated operators, server-written only
+    // Receipts are immutable records from MC96 — never modified or deleted by clients
+    match /receipts/{receiptId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if false;
+
+      match /{allSubcollections=**} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+
+    // Assets: readable by authenticated operators, server/IAM-written only
+    // Assets reference files stored in Cloud Storage — never directly modified by clients
+    match /assets/{assetFingerprint} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if false;
+
+      match /{allSubcollections=**} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+
+    // Lineage: event history, readable by operators, server-written only
+    // Immutable append-only event log for audit trails
+    match /lineage/{eventId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if false;
+
+      match /{allSubcollections=**} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+
+    // Approvals: clients may create approval requests for themselves
+    // Clients read their own approvals; servers process and may mark as complete
+    match /approvals/{approvalId} {
+      allow read: if isOwner(resource.data.operatorUid)
+        || isOwner(resource.data.createdBy);
+
+      allow create: if isValidApprovalCreate()
+        && request.resource.data.approvalId == approvalId
+        && request.resource.data.operatorUid == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.operatorUid == request.resource.data.createdBy;
+
+      allow update, delete: if false;
+
+      match /{allSubcollections=**} {
+        allow read: if isAuthenticated();
+        allow write: if false;
+      }
+    }
+  }
+}

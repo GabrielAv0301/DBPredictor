@@ -13,6 +13,54 @@
             "script": "pretest",
             "presentation": { "reveal": "silent" },
             "problemMatcher": "$tsc"
+        },
+        {
+            "label": "NOIZY: Observe (1)",
+            "type": "shell",
+            "command": "npm run autonomy:center -- 1",
+            "problemMatcher": []
+        },
+        {
+            "label": "NOIZY: Triage (2)",
+            "type": "shell",
+            "command": "npm run autonomy:center -- 2",
+            "problemMatcher": []
+        },
+        {
+            "label": "NOIZY: Sync Dry (3)",
+            "type": "shell",
+            "command": "npm run autonomy:center -- 3",
+            "problemMatcher": []
+        },
+        {
+            "label": "NOIZY: Sync Approve (4)",
+            "type": "shell",
+            "command": "npm run autonomy:center -- 4",
+            "problemMatcher": []
+        },
+        {
+            "label": "NOIZY: Duplicates (5)",
+            "type": "shell",
+            "command": "npm run autonomy:center -- 5",
+            "problemMatcher": []
+        },
+        {
+            "label": "NOIZY: Ship Gate (7)",
+            "type": "shell",
+            "command": "npm run autonomy:center -- 7",
+            "problemMatcher": []
+        },
+        {
+            "label": "NOIZY: FOSS Doctor (9)",
+            "type": "shell",
+            "command": "npm run autonomy:center -- 9",
+            "problemMatcher": []
+        },
+        {
+            "label": "NOIZY: Capacity Report (10)",
+            "type": "shell",
+            "command": "npm run autonomy:center -- 10",
+            "problemMatcher": []
         }
     ]
 }

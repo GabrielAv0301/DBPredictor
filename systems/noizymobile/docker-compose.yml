@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+    mosquitto:
+        image: eclipse-mosquitto:2
+        restart: unless-stopped
+        ports:
+            - 1883:1883
+        volumes:
+            - ./mosquitto/config:/mosquitto/config
+            - ./mosquitto/data:/mosquitto/data
+
+    influxdb:
+        image: influxdb:2.7
+        restart: unless-stopped
+        ports:
+            - 8086:8086
+        environment:
+            - INFLUXDB_UI_PRESET=basic
+        volumes:
+            - ./influxdb:/var/lib/influxdb2
+
+    node-red:
+        image: nodered/node-red:latest
+        restart: unless-stopped
+        ports:
+            - 1880:1880
+        volumes:
+            - ./node-red/data:/data
+
+    n8n:
+        image: n8nio/n8n:latest
+        restart: unless-stopped
+        ports:
+            - 5678:5678
+        environment:
+            - N8N_BASIC_AUTH_ACTIVE=true
+
+    starlink-collector:
+        build: ./starlink-collector
+        restart: unless-stopped
+        depends_on:
+            - mosquitto
+            - influxdb
+        environment:
+            - MQTT_BROKER=mosquitto
+            - MQTT_PORT=1883
+            - STARLINK_HOST=192.168.100.1
+            - STARLINK_PORT=9200
+
+    sgp4-worker:
+        build: ./sgp4-worker
+        restart: unless-stopped
+        depends_on:
+            - influxdb
+        environment:
+            - CELESTRAK_URL=https://celestrak.org/NORAD/elements/table.php?GROUP=starlink&FORMAT=gp

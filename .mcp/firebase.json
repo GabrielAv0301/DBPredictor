@@ -1,0 +1,14 @@
+{
+    "firebase": {
+        "command": "npx",
+        "args": [
+            "-y",
+            "firebase-tools@latest",
+            "mcp",
+            "--dir",
+            "${FIREBASE_PROJECT_DIR}",
+            "--only",
+            "firestore,storage"
+        ]
+    }
+}

@@ -1,0 +1,3 @@
+requests
+sgp4
+paho-mqtt

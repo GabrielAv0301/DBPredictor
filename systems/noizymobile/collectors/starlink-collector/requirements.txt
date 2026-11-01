@@ -1,0 +1,5 @@
+grpcio
+paho-mqtt
+requests
+influxdb-client
+sgp4

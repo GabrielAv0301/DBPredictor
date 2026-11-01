@@ -1,0 +1,47 @@
+local_apps_mesh:
+    ide_layer:
+        - VSCodium
+        - GoLand
+        - IntelliJ IDEA Community
+        - JetBrains Fleet
+        - Continue
+        - Terminal
+        - GitKraken
+        - Local MCP Dashboard
+        - Supersonic NOIZYBEAST IDE
+
+    model_runtime:
+        primary: Ollama
+        secondary: LM Studio
+        policy:
+            local_only_inference: true
+            model_downloads_allowed: true
+
+    knowledge_layer:
+        - TagSpaces
+        - DevonThink
+        - DevonAgentPro
+        - DevonSphere
+
+    orchestration:
+        operator_plane: DesktopCommander
+        automation: n8n
+        java_runner: JBang
+        webhook: /noizy/sync
+        schedule:
+            daily_scan_enabled: true
+
+integration_contract:
+    inputs:
+        - request_id
+        - intent
+        - target
+    outputs:
+        - action_summary
+        - receipt_id
+        - timestamp
+    guarantees:
+        - no_delete
+        - no_destructive_sync
+        - local_first
+        - metadata_only_mirror

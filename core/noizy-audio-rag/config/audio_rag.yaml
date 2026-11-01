@@ -1,0 +1,90 @@
+pipeline:
+    input_dir: /NOIZY/raw_stems
+    canary_limit: 500
+    dry_run_default: true
+    rollout_focus:
+        - deployment
+        - migration
+        - D1
+        - R2
+        - Cloudflare
+    horizon:
+        retention_years: 40
+        storage_target_tb: 34
+        principles:
+            - artist sovereignty
+            - voice sovereignty
+            - local-first
+            - AI-native
+            - future-proof
+
+storage:
+    local_faiss_primary: true
+    r2_bucket: r2://voice-dna-storage/
+    r2_layout: sha256/{aa}/{bb}/{sha256}{ext}
+    firestore_metadata_only: true
+    vectors_mirror_enabled: true
+    raw_assets_remote_upload: false
+
+rules:
+    no_deletes: true
+    no_destructive_sync: true
+    no_overwrite_without_approval: true
+    no_duplicates: true
+    immutable_references: true
+    receipts_rule: true
+    mc96_governs: true
+
+firestore:
+    collections:
+        - assets
+        - receipts
+        - consent_records
+        - lineage
+        - sync_state
+        - quality_reports
+        - duplicate_groups
+
+mcp_mesh:
+    channels:
+        - MCP.Storage
+        - MCP.Receipts
+        - MCP.Papyrus
+        - MCP.Firestore
+        - MCP.D1
+        - MCP.R2
+        - MCP.HotRod
+        - MCP.Git
+        - MCP.Discord
+        - MCP.Matrix
+
+agents:
+    chief_architect: GABRIEL
+    research_director: LUCY
+    operations_commander: HEAVEN
+    auditor: KEITH
+    archivist: SHIRL
+    catalog: SHIRL
+    builder: NOIZYBEAST
+    execution: NOIZYBEAST
+
+research_scope:
+    - deep search
+    - knowledge
+    - documentation
+
+catalog_scope:
+    - catalog
+    - metadata
+    - classification
+
+auditor_scope:
+    - receipts
+    - lineage
+    - duplicate audits
+    - integrity checks
+
+builder_scope:
+    - execution
+    - automation
+    - pipelines
