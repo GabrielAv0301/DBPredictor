@@ -1,38 +1,38 @@
 {
-  "version": "1.0",
-  "updatedAt": "2026-08-18T04:41:19.631Z",
-  "storyId": null,
-  "direction": {
-    "activeRoles": [],
-    "activeFiles": [],
-    "domain": "general",
-    "lastActivityAt": "2026-08-18T04:40:21.475Z"
-  },
-  "rules": {
-    "code_quality": [
-      "**No Regressions**: Every change must be verified to not break existing functionality.",
-      "**Separation of Concerns**: Each function, module, or class should have a single, well-defined responsibility.",
-      "**Clear Naming**: Use descriptive, intention-revealing names for variables, functions, and types.",
-      "**DRY — Don't Repeat Yourself**: Avoid duplicating logic. If the same pattern appears 3+ times, extract it."
-    ],
-    "testing": [
-      "**Test All New Code**: Every new function, endpoint, or feature must have corresponding tests.",
-      "**Stable Tests**: Tests must be deterministic — no flaky tests that sometimes pass, sometimes fail."
-    ],
-    "security": [
-      "**No Secrets in Code**: Never commit passwords, API keys, tokens, or other credentials to the repository.",
-      "**Validate All Input**: Validate and sanitize all input at system boundaries (API endpoints, form inputs, file uploads).",
-      "**Principle of Least Privilege**: Grant only the minimum permissions necessary for each operation."
-    ],
-    "architecture": [
-      "**SOLID Principles**: **Single Responsibility:** Each module/class has one reason to change.",
-      "**Service-Oriented Design**: Structure the codebase as services or modules that communicate through well-defined interfaces."
-    ],
-    "git_workflow": [
-      "**Small, Focused Commits**: Each commit should represent a single logical change.",
-      "**Review Before Merge**: All code changes should be reviewed before merging to the main branch."
-    ]
-  },
-  "activeTemplate": null,
-  "source": "fallback"
+    "version": "1.0",
+    "updatedAt": "2026-08-18T04:41:19.631Z",
+    "storyId": null,
+    "direction": {
+        "activeRoles": [],
+        "activeFiles": [],
+        "domain": "general",
+        "lastActivityAt": "2026-08-18T04:40:21.475Z"
+    },
+    "rules": {
+        "code_quality": [
+            "**No Regressions**: Every change must be verified to not break existing functionality.",
+            "**Separation of Concerns**: Each function, module, or class should have a single, well-defined responsibility.",
+            "**Clear Naming**: Use descriptive, intention-revealing names for variables, functions, and types.",
+            "**DRY — Don't Repeat Yourself**: Avoid duplicating logic. If the same pattern appears 3+ times, extract it."
+        ],
+        "testing": [
+            "**Test All New Code**: Every new function, endpoint, or feature must have corresponding tests.",
+            "**Stable Tests**: Tests must be deterministic — no flaky tests that sometimes pass, sometimes fail."
+        ],
+        "security": [
+            "**No Secrets in Code**: Never commit passwords, API keys, tokens, or other credentials to the repository.",
+            "**Validate All Input**: Validate and sanitize all input at system boundaries (API endpoints, form inputs, file uploads).",
+            "**Principle of Least Privilege**: Grant only the minimum permissions necessary for each operation."
+        ],
+        "architecture": [
+            "**SOLID Principles**: **Single Responsibility:** Each module/class has one reason to change.",
+            "**Service-Oriented Design**: Structure the codebase as services or modules that communicate through well-defined interfaces."
+        ],
+        "git_workflow": [
+            "**Small, Focused Commits**: Each commit should represent a single logical change.",
+            "**Review Before Merge**: All code changes should be reviewed before merging to the main branch."
+        ]
+    },
+    "activeTemplate": null,
+    "source": "fallback"
 }

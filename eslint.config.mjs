@@ -1,43 +1,78 @@
 import eslint from '@eslint/js';
-import tseslint from 'typescript-eslint';
+import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
+    {
+        ignores: [
+            'out/',
+            'dist/',
+            'coverage/',
+            '**/node_modules/**',
+            '.vscode-test/',
+            '*.vsix',
+            'test/e2e/fixture/',
+        ],
+    },
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
     {
-        files: ['**/*.ts'],
+        files: ['src/**/*.ts', 'test/**/*.ts'],
         languageOptions: {
-            parserOptions: {
-                project: ['./tsconfig.json', './tsconfig.test.json'],
-                tsconfigRootDir: import.meta.dirname,
-            },
-            globals: {
-                ...globals.node,
-                ...globals.mocha,
-            },
+            globals: { ...globals.node, ...globals.mocha },
         },
         rules: {
-            '@typescript-eslint/no-unused-vars': 'warn',
-            '@typescript-eslint/no-explicit-any': 'warn',
             'no-console': 'error',
-            semi: ['error', 'always'],
-            quotes: ['error', 'single'],
+            eqeqeq: ['error', 'always'],
+            '@typescript-eslint/no-explicit-any': 'error',
+            '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+            '@typescript-eslint/consistent-type-imports': [
+                'error',
+                { fixStyle: 'inline-type-imports' },
+            ],
         },
     },
     {
-        files: ['**/*.js', '**/*.mjs'],
-        languageOptions: {
-            globals: {
-                ...globals.node,
-            },
-        },
+        // Test runner inside the extension host: prints results and loads suites dynamically.
+        files: ['test/e2e/**/*.ts'],
         rules: {
-            'no-console': 'off', // Permitimos console en scripts de build
+            'no-console': 'off',
             '@typescript-eslint/no-require-imports': 'off',
         },
     },
     {
-        ignores: ['out/', 'dist/', '**/node_modules/**', 'webview-ui/'],
+        files: ['src/db/worker.ts'],
+        rules: {
+            // The worker must never import the VS Code API (it runs in a worker thread).
+            'no-restricted-imports': ['error', { paths: ['vscode'] }],
+        },
+    },
+    {
+        files: ['src/core/**/*.ts'],
+        rules: {
+            // Core logic is pure and unit-tested without VS Code.
+            'no-restricted-imports': ['error', { paths: ['vscode'] }],
+        },
+    },
+    {
+        files: ['webview-ui/**/*.{ts,tsx}'],
+        plugins: { 'react-hooks': reactHooks },
+        languageOptions: {
+            globals: { ...globals.browser },
+        },
+        rules: {
+            ...reactHooks.configs.recommended.rules,
+            'no-console': 'error',
+            '@typescript-eslint/no-explicit-any': 'error',
+        },
+    },
+    {
+        files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
+        languageOptions: { globals: { ...globals.node } },
+        rules: {
+            '@typescript-eslint/no-require-imports': 'off',
+            'no-console': 'off',
+        },
     }
 );

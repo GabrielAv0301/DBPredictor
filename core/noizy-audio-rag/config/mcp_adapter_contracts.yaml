@@ -1,133 +1,133 @@
 adapters:
-  MCP.Storage:
-    purpose: Local file access and staging orchestration
-    input_contract:
-      - request_id
-      - action
-      - path
-    output_contract:
-      - status
-      - receipt_id
-    constraints:
-      - no_delete
-      - no_overwrite_without_approval
+    MCP.Storage:
+        purpose: Local file access and staging orchestration
+        input_contract:
+            - request_id
+            - action
+            - path
+        output_contract:
+            - status
+            - receipt_id
+        constraints:
+            - no_delete
+            - no_overwrite_without_approval
 
-  MCP.Receipts:
-    purpose: Receipt write/verify/sign pipeline
-    input_contract:
-      - request_id
-      - stage
-      - payload_sha256
-      - operator
-    output_contract:
-      - receipt_id
-      - timestamp
-      - signature
-    constraints:
-      - append_only
+    MCP.Receipts:
+        purpose: Receipt write/verify/sign pipeline
+        input_contract:
+            - request_id
+            - stage
+            - payload_sha256
+            - operator
+        output_contract:
+            - receipt_id
+            - timestamp
+            - signature
+        constraints:
+            - append_only
 
-  MCP.Papyrus:
-    purpose: Papyrus SQLite and registry operations
-    input_contract:
-      - request_id
-      - table
-      - operation
-      - data
-    output_contract:
-      - rows_affected
-      - receipt_id
-    constraints:
-      - no_destructive_sync
+    MCP.Papyrus:
+        purpose: Papyrus SQLite and registry operations
+        input_contract:
+            - request_id
+            - table
+            - operation
+            - data
+        output_contract:
+            - rows_affected
+            - receipt_id
+        constraints:
+            - no_destructive_sync
 
-  MCP.Firestore:
-    purpose: Metadata/vector mirror for global discovery
-    input_contract:
-      - request_id
-      - collection
-      - metadata_payload
-    output_contract:
-      - mirrored_count
-      - receipt_id
-    constraints:
-      - metadata_only
-      - no_raw_audio
+    MCP.Firestore:
+        purpose: Metadata/vector mirror for global discovery
+        input_contract:
+            - request_id
+            - collection
+            - metadata_payload
+        output_contract:
+            - mirrored_count
+            - receipt_id
+        constraints:
+            - metadata_only
+            - no_raw_audio
 
-  MCP.D1:
-    purpose: Cloudflare D1 mirror/state operations
-    input_contract:
-      - request_id
-      - sql_operation
-      - migration_id
-    output_contract:
-      - result
-      - receipt_id
-    constraints:
-      - migrations_signed
+    MCP.D1:
+        purpose: Cloudflare D1 mirror/state operations
+        input_contract:
+            - request_id
+            - sql_operation
+            - migration_id
+        output_contract:
+            - result
+            - receipt_id
+        constraints:
+            - migrations_signed
 
-  MCP.R2:
-    purpose: Object key registration and mirror metadata
-    input_contract:
-      - request_id
-      - object_key
-      - sha256
-    output_contract:
-      - object_ref
-      - receipt_id
-    constraints:
-      - immutable_sha256_paths
-      - no_raw_asset_transfer_without_policy_override
+    MCP.R2:
+        purpose: Object key registration and mirror metadata
+        input_contract:
+            - request_id
+            - object_key
+            - sha256
+        output_contract:
+            - object_ref
+            - receipt_id
+        constraints:
+            - immutable_sha256_paths
+            - no_raw_asset_transfer_without_policy_override
 
-  MCP.HotRod:
-    purpose: Accelerated embedding/index pipeline handoff
-    input_contract:
-      - request_id
-      - asset_id
-      - embedding_job
-    output_contract:
-      - faiss_update
-      - receipt_id
+    MCP.HotRod:
+        purpose: Accelerated embedding/index pipeline handoff
+        input_contract:
+            - request_id
+            - asset_id
+            - embedding_job
+        output_contract:
+            - faiss_update
+            - receipt_id
 
-  MCP.Git:
-    purpose: Versioned change tracking for configs/workflows
-    input_contract:
-      - request_id
-      - change_set
-      - message
-    output_contract:
-      - commit_sha
-      - receipt_id
+    MCP.Git:
+        purpose: Versioned change tracking for configs/workflows
+        input_contract:
+            - request_id
+            - change_set
+            - message
+        output_contract:
+            - commit_sha
+            - receipt_id
 
-  MCP.Discord:
-    purpose: Operator notifications
-    input_contract:
-      - request_id
-      - summary
-      - severity
-    output_contract:
-      - delivered
-      - receipt_id
+    MCP.Discord:
+        purpose: Operator notifications
+        input_contract:
+            - request_id
+            - summary
+            - severity
+        output_contract:
+            - delivered
+            - receipt_id
 
-  MCP.Matrix:
-    purpose: Sovereign chat notification fallback
-    input_contract:
-      - request_id
-      - summary
-      - severity
-    output_contract:
-      - delivered
-      - receipt_id
+    MCP.Matrix:
+        purpose: Sovereign chat notification fallback
+        input_contract:
+            - request_id
+            - summary
+            - severity
+        output_contract:
+            - delivered
+            - receipt_id
 
 cross_adapter_policy:
-  routing_chain:
-    - Agents
-    - MCP
-    - Receipt
-    - Storage
-  required_headers:
-    - x-request-id
-    - x-receipt-signature
-  rate_limit:
-    per_agent_per_minute: 120
-  audit_logging:
-    enabled: true
-    sink: Papyrus.stage_receipts
+    routing_chain:
+        - Agents
+        - MCP
+        - Receipt
+        - Storage
+    required_headers:
+        - x-request-id
+        - x-receipt-signature
+    rate_limit:
+        per_agent_per_minute: 120
+    audit_logging:
+        enabled: true
+        sink: Papyrus.stage_receipts

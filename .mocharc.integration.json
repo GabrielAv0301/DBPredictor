@@ -1,0 +1,5 @@
+{
+    "spec": ["out/test-build/test/integration/**/*.test.js"],
+    "timeout": 60000,
+    "reporter": "spec"
+}
