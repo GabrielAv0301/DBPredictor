@@ -1,103 +1,76 @@
-import React from 'react';
-import { HistoryEntry } from '../types/shared';
+import { Clock, Download, Trash2 } from 'lucide-react';
+import type { HistoryEntry } from '../../../src/shared/types';
+import { fmt, operationLabel } from '../format';
+import { post } from '../vscode';
 import { RiskBadge } from './RiskBadge';
-import { Clock, Trash2, FileText, Download } from 'lucide-react';
 
-interface HistoryViewProps {
-    history: HistoryEntry[];
-    onClear: () => void;
-    onExport: (format: 'json' | 'csv') => void;
-}
-
-export const HistoryView: React.FC<HistoryViewProps> = ({ history, onClear, onExport }) => {
-    if (history.length === 0) {
+export function HistoryView({ entries }: { entries: HistoryEntry[] }) {
+    if (entries.length === 0) {
         return (
-            <div style={{ textAlign: 'center', opacity: 0.6, padding: '40px' }}>
-                <Clock size={48} style={{ marginBottom: '16px' }} />
-                <p>No history yet. Analyze some mutations to populate this list.</p>
+            <div className="empty">
+                <Clock size={40} />
+                <p>No history yet. Analyses you open and counts you run appear here.</p>
             </div>
         );
     }
 
     return (
-        <div>
-            <div
-                className="flex-row"
-                style={{ justifyContent: 'space-between', marginBottom: '16px' }}
-            >
-                <h2 className="subtitle" style={{ fontWeight: 'bold' }}>
-                    RECENT ANALYSES
-                </h2>
-                <div className="flex-row" style={{ gap: '12px' }}>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                            className="secondary-button"
-                            onClick={() => onExport('json')}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.7rem',
-                                padding: '4px 8px',
-                            }}
-                        >
-                            <Download size={12} /> JSON
-                        </button>
-                        <button
-                            className="secondary-button"
-                            onClick={() => onExport('csv')}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                fontSize: '0.7rem',
-                                padding: '4px 8px',
-                            }}
-                        >
-                            <Download size={12} /> CSV
-                        </button>
-                    </div>
-                    <button
-                        onClick={onClear}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--vscode-errorForeground)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontSize: '0.8rem',
-                        }}
-                    >
-                        <Trash2 size={14} /> Clear
-                    </button>
-                </div>
+        <div className="stack">
+            <div className="toolbar">
+                <span className="muted">{entries.length} entries (this workspace)</span>
+                <span className="spacer" />
+                <button
+                    className="button secondary"
+                    onClick={() => post({ type: 'exportHistory', format: 'json' })}
+                >
+                    <Download size={14} /> JSON
+                </button>
+                <button
+                    className="button secondary"
+                    onClick={() => post({ type: 'exportHistory', format: 'csv' })}
+                >
+                    <Download size={14} /> CSV
+                </button>
+                <button className="button danger" onClick={() => post({ type: 'clearHistory' })}>
+                    <Trash2 size={14} /> Clear
+                </button>
             </div>
-
-            {history.map((entry) => (
-                <div key={entry.id} className="card" style={{ padding: '12px', cursor: 'default' }}>
-                    <div
-                        className="flex-row"
-                        style={{ justifyContent: 'space-between', marginBottom: '8px' }}
-                    >
-                        <div className="flex-row">
-                            <FileText size={14} opacity={0.7} />
-                            <span style={{ fontWeight: 'bold' }}>{entry.impact.table}</span>
+            <ul className="history">
+                {entries.map((e) => (
+                    <li key={e.id} className="card history-item">
+                        <div className="history-head">
+                            <RiskBadge level={e.impact.riskLevel} />
+                            <strong className="mono">
+                                {e.impact.table ?? e.impact.tableInCode}
+                            </strong>
+                            <span className="spacer" />
+                            <time
+                                className="muted small"
+                                dateTime={new Date(e.timestamp).toISOString()}
+                            >
+                                {new Date(e.timestamp).toLocaleString()}
+                            </time>
                         </div>
-                        <RiskBadge level={entry.impact.riskLevel} />
-                    </div>
-
-                    <div style={{ fontSize: '0.8rem', opacity: 0.8, marginBottom: '8px' }}>
-                        <code>{entry.impact.operation}</code> ·{' '}
-                        {entry.impact.totalRowsAffected.toLocaleString()} rows
-                    </div>
-
-                    <div style={{ fontSize: '0.7rem', opacity: 0.5 }}>
-                        {new Date(entry.timestamp).toLocaleString()}
-                    </div>
-                </div>
-            ))}
+                        <div className="muted small">
+                            {operationLabel(e.impact)} · {e.impact.file}:{e.impact.line + 1}
+                        </div>
+                        <div className="small">
+                            Estimate:{' '}
+                            {e.impact.totalRows === null ? '—' : `~${fmt(e.impact.totalRows)} rows`}
+                            {e.simulation?.ok && (
+                                <>
+                                    {' '}
+                                    · Counted: {e.simulation.exact ? '' : '≤ '}
+                                    {fmt(e.simulation.baseRows)}
+                                    {e.simulation.cascadeDeletedRows + e.simulation.nullifiedRows >
+                                        0 &&
+                                        ` (+${fmt(e.simulation.cascadeDeletedRows + e.simulation.nullifiedRows)} related)`}
+                                </>
+                            )}
+                        </div>
+                    </li>
+                ))}
+            </ul>
         </div>
     );
-};
+}

@@ -1,63 +1,47 @@
-import React from 'react';
-import { CascadeResult } from '../types/shared';
-import { ArrowRight, ShieldAlert } from 'lucide-react';
+import type { CascadeNode } from '../../../src/shared/types';
+import { fmt } from '../format';
 
-interface CascadeTreeProps {
-    results: CascadeResult[];
-    level?: number;
-}
+const RULE_CLASS: Record<CascadeNode['rule'], string> = {
+    CASCADE: 'rule-cascade',
+    'SET NULL': 'rule-setnull',
+    'SET DEFAULT': 'rule-setnull',
+    RESTRICT: 'rule-restrict',
+    'NO ACTION': 'rule-restrict',
+};
 
-export const CascadeTree: React.FC<CascadeTreeProps> = ({ results, level = 0 }) => {
-    if (results.length === 0) return null;
+const RULE_HINT: Record<CascadeNode['rule'], string> = {
+    CASCADE: 'Referencing rows are deleted too.',
+    'SET NULL': 'The foreign key column is set to NULL.',
+    'SET DEFAULT': 'The foreign key column is set to its default.',
+    RESTRICT: 'The statement fails if referencing rows exist.',
+    'NO ACTION': 'The statement fails (at commit) if referencing rows exist.',
+};
 
+export function CascadeTree({ nodes }: { nodes: CascadeNode[] }) {
+    if (nodes.length === 0) return null;
     return (
-        <div
-            style={{
-                marginLeft: level > 0 ? '20px' : '0',
-                borderLeft: level > 0 ? '1px solid var(--vscode-widget-border)' : 'none',
-                paddingLeft: level > 0 ? '12px' : '0',
-            }}
-        >
-            {results.map((res, i) => (
-                <div key={`${res.table}-${i}`} style={{ marginBottom: '12px' }}>
-                    <div
-                        className="flex-row"
-                        style={{ opacity: res.rule === 'RESTRICT' ? 1 : 0.9 }}
-                    >
-                        <ArrowRight size={14} />
-                        <span style={{ fontWeight: 'bold' }}>{res.table}</span>
-                        <span className="subtitle" style={{ margin: 0 }}>
-                            ({res.rowsEstimated.toLocaleString()} rows)
-                        </span>
+        <ul className="tree">
+            {nodes.map((node, i) => (
+                <li key={`${node.table}:${node.columns.join(',')}:${i}`}>
+                    <div className="tree-row">
                         <span
-                            style={{
-                                fontSize: '0.7rem',
-                                padding: '1px 4px',
-                                borderRadius: '3px',
-                                backgroundColor:
-                                    res.rule === 'CASCADE'
-                                        ? 'var(--vscode-debugIcon-breakpointForeground)'
-                                        : 'var(--vscode-editorError-foreground)',
-                                color: 'var(--vscode-editor-background)',
-                            }}
+                            className={`rule ${RULE_CLASS[node.rule]}`}
+                            title={RULE_HINT[node.rule]}
                         >
-                            {res.rule}
+                            {node.rule}
+                        </span>
+                        <span className="mono">{node.table}</span>
+                        <span className="muted mono">({node.columns.join(', ')})</span>
+                        <span className="spacer" />
+                        <span className="muted">
+                            {node.cyclic
+                                ? 'self-reference, not followed'
+                                : `~${fmt(node.rowsEstimated)} rows`}
                         </span>
                     </div>
-
-                    {res.rule === 'RESTRICT' && (
-                        <div
-                            className="flex-row error-text"
-                            style={{ fontSize: '0.8rem', marginTop: '4px' }}
-                        >
-                            <ShieldAlert size={14} />
-                            <span>This query WILL FAIL due to RESTRICT rule.</span>
-                        </div>
-                    )}
-
-                    <CascadeTree results={res.children} level={level + 1} />
-                </div>
+                    <CascadeTree nodes={node.children} />
+                </li>
             ))}
-        </div>
+        </ul>
     );
-};
+}

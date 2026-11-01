@@ -1,25 +1,24 @@
-# Dependencias
+# Dependencies
 node_modules/
 
-# Compilación y Empaquetado
+# Build output and packages
 out/
 dist/
+coverage/
 *.vsix
-webview-ui/dist/
-webview-ui/node_modules/
 
-# Entorno y Secretos
-.env
-.env.local
-.env.*.local
-
-# VS Code testing e Historial
+# VS Code test downloads
 .vscode-test/
-.history/
+
+# Environment and secrets
+.env
+.env.*
+
+# Logs
 *.log
 npm-debug.log*
 
-# Archivos de Sistema
+# OS files
 .DS_Store
 ._*
 Thumbs.db
@@ -27,3 +26,6 @@ desktop.ini
 
 # TypeScript
 *.tsbuildinfo
+
+# Written by the end-to-end tests
+test/e2e/fixture/.vscode/

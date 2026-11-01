@@ -41,22 +41,22 @@
 
 ### 🟢 LOW — Mantenibilidad y documentación
 
-| ID       | Problema                                        | Archivo                                    | Descripción                                                                   | Status       |
-| -------- | ----------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- | ------------ |
-| **L-01** | Magic numbers sin constantes nombradas | `ImpactEngine.ts`, `db.worker.ts`, etc. | Valores hardcodeados sin contexto semántico | ✅ Resuelto |
-| **L-02** | Código mixto español/inglés | Múltiples archivos | Estandarización de comentarios y logs a inglés | ✅ Resuelto |
-| **L-03** | Sin Prettier (solo ESLint para formato) | Raíz del proyecto | Integración de Prettier para consistencia de estilo | ✅ Resuelto |
-| **L-04** | Sin `.editorconfig` | Raíz del proyecto | Configuración IDE inconsistente | ✅ Resuelto |
-| **L-05** | README incompleto | `README.md` | Se agregó referencia de configuración, troubleshooting y arquitectura | ✅ Resuelto |
-| **L-06** | CHANGELOG en español | `CHANGELOG.md` | Ya se encontraba en inglés (verificado) | ✅ Resuelto |
-| **L-07** | Directorio `docs/` vacío | `docs/` | Se limpió la estructura del directorio | ✅ Resuelto |
-| **L-08** | Directorio `context/` vacío/incompleto | `context/` | Directorios eliminados | ✅ Resuelto |
-| **L-09** | CI sin cache de `webview-ui/node_modules` | `.github/workflows/ci.yml` | Cache implementado en CI | ✅ Resuelto |
-| **L-10** | Paquetes ESLint duplicados | `package.json` | Limpieza de dependencias de ESLint redundantes | ✅ Resuelto |
+| ID       | Problema                                        | Archivo                                    | Descripción                                                                 | Status      |
+| -------- | ----------------------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------- | ----------- |
+| **L-01** | Magic numbers sin constantes nombradas          | `ImpactEngine.ts`, `db.worker.ts`, etc.    | Valores hardcodeados sin contexto semántico                                 | ✅ Resuelto |
+| **L-02** | Código mixto español/inglés                     | Múltiples archivos                         | Estandarización de comentarios y logs a inglés                              | ✅ Resuelto |
+| **L-03** | Sin Prettier (solo ESLint para formato)         | Raíz del proyecto                          | Integración de Prettier para consistencia de estilo                         | ✅ Resuelto |
+| **L-04** | Sin `.editorconfig`                             | Raíz del proyecto                          | Configuración IDE inconsistente                                             | ✅ Resuelto |
+| **L-05** | README incompleto                               | `README.md`                                | Se agregó referencia de configuración, troubleshooting y arquitectura       | ✅ Resuelto |
+| **L-06** | CHANGELOG en español                            | `CHANGELOG.md`                             | Ya se encontraba en inglés (verificado)                                     | ✅ Resuelto |
+| **L-07** | Directorio `docs/` vacío                        | `docs/`                                    | Se limpió la estructura del directorio                                      | ✅ Resuelto |
+| **L-08** | Directorio `context/` vacío/incompleto          | `context/`                                 | Directorios eliminados                                                      | ✅ Resuelto |
+| **L-09** | CI sin cache de `webview-ui/node_modules`       | `.github/workflows/ci.yml`                 | Cache implementado en CI                                                    | ✅ Resuelto |
+| **L-10** | Paquetes ESLint duplicados                      | `package.json`                             | Limpieza de dependencias de ESLint redundantes                              | ✅ Resuelto |
 | **L-11** | `vscode.mock.ts` — `positionAt()` returns dummy | `test/unit/SupabaseDetector.test.ts:13-15` | Se eliminó duplicación de MockDocument y se proveyó una implementación real | ✅ Resuelto |
-| **L-12** | Sin custom error classes                        | `src/shared/errors.ts`                     | Implementación de `QueryGuardError` para errores tipados                      | ✅ Resuelto  |
-| **L-13** | `.gitignore` incompleto                         | `.gitignore`                               | Se agregaron exclusiones para archivos de macOS (`._*`)                       | ✅ Resuelto |
-| **L-14** | Sin integración tests en CI                     | `.github/workflows/ci.yml`                 | Tests ahora se ejecutan en cada push/PR                                       | ✅ Resuelto  |
+| **L-12** | Sin custom error classes                        | `src/shared/errors.ts`                     | Implementación de `QueryGuardError` para errores tipados                    | ✅ Resuelto |
+| **L-13** | `.gitignore` incompleto                         | `.gitignore`                               | Se agregaron exclusiones para archivos de macOS (`._*`)                     | ✅ Resuelto |
+| **L-14** | Sin integración tests en CI                     | `.github/workflows/ci.yml`                 | Tests ahora se ejecutan en cada push/PR                                     | ✅ Resuelto |
 
 ---
 
@@ -97,6 +97,7 @@
 - [x] M-05: Corregir cleanup en timeout
 
 ### Fase 4 — Consistencia y DX
+
 - [x] L-01: Constants para magic numbers
 - [x] L-02: Estandarizar comentarios a inglés
 - [x] L-04: Agregar .editorconfig
@@ -105,6 +106,7 @@
 - [x] L-13: Mejorar .gitignore
 
 ### Fase 5 — Documentación
+
 - [x] L-05: Mejorar README
 - [x] L-06: CHANGELOG en inglés
 - [x] L-07: Poblar docs/ o eliminarlo

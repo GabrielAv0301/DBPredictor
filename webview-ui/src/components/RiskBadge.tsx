@@ -1,41 +1,17 @@
-import React from 'react';
-import { RiskLevel } from '../types/shared';
+import type { RiskLevel } from '../../../src/shared/types';
 
-interface RiskBadgeProps {
-    level: RiskLevel;
-}
+const LABEL: Record<RiskLevel, string> = {
+    DESTRUCTIVE: 'Destructive',
+    CRITICAL: 'Critical',
+    WARNING: 'Warning',
+    SAFE: 'Safe',
+    UNKNOWN: 'Unknown',
+};
 
-export const RiskBadge: React.FC<RiskBadgeProps> = ({ level }) => {
-    const getStyles = () => {
-        switch (level) {
-            case 'DESTRUCTIVE':
-                return {
-                    backgroundColor: 'var(--vscode-errorForeground)',
-                    color: 'var(--vscode-editor-background)',
-                };
-            case 'CRITICAL':
-                return {
-                    backgroundColor: 'var(--vscode-editorError-foreground)',
-                    color: 'var(--vscode-editor-background)',
-                };
-            case 'WARNING':
-                return {
-                    backgroundColor: 'var(--vscode-editorWarning-foreground)',
-                    color: 'var(--vscode-editor-background)',
-                };
-            case 'SAFE':
-                return {
-                    backgroundColor: 'var(--vscode-debugIcon-breakpointForeground)',
-                    color: 'var(--vscode-editor-background)',
-                };
-            default:
-                return {};
-        }
-    };
-
+export function RiskBadge({ level }: { level: RiskLevel }) {
     return (
-        <span className="badge" style={getStyles()}>
-            {level}
+        <span className={`badge risk-${level.toLowerCase()}`} title={`Risk level: ${LABEL[level]}`}>
+            {LABEL[level]}
         </span>
     );
-};
+}

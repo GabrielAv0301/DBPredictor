@@ -1,16 +1,31 @@
-export function debounce<A extends unknown[], R>(
-    func: (...args: A) => R,
-    wait: number
-): (...args: A) => void {
-    let timeout: NodeJS.Timeout | null = null;
+/** Debounces calls per key (e.g. per document URI) so one file never delays another. */
+export class KeyedDebouncer<T> {
+    private readonly timers = new Map<string, NodeJS.Timeout>();
 
-    return (...args: A): void => {
-        if (timeout) {
-            clearTimeout(timeout);
-        }
+    constructor(
+        private readonly delay: () => number,
+        private readonly run: (value: T) => void
+    ) {}
 
-        timeout = setTimeout(() => {
-            func(...args);
-        }, wait);
-    };
+    public schedule(key: string, value: T): void {
+        this.cancel(key);
+        this.timers.set(
+            key,
+            setTimeout(() => {
+                this.timers.delete(key);
+                this.run(value);
+            }, this.delay())
+        );
+    }
+
+    public cancel(key: string): void {
+        const timer = this.timers.get(key);
+        if (timer) clearTimeout(timer);
+        this.timers.delete(key);
+    }
+
+    public dispose(): void {
+        this.timers.forEach((t) => clearTimeout(t));
+        this.timers.clear();
+    }
 }

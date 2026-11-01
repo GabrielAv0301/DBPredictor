@@ -1,174 +1,310 @@
 import * as ts from 'typescript';
-import {
-    MutationInfo,
-    MutationDetector,
-    MutationOperation,
-    DocumentLike,
-} from './DetectorInterface';
+import type { MutationOperation } from '../../shared/types';
+import { propertyName, receiverName, templateText, toFilterValue, unwrap } from '../analysis/ast';
+import { classifyRawSql } from '../sql/rawSql';
+import type { DetectorOptions, FilterCondition, FilterOperator, FilterValue } from './types';
+import type { PartialMutation } from './shared';
 
-export class PrismaDetector implements MutationDetector {
-    private readonly MUTATION_METHODS: MutationOperation[] = [
-        'deleteMany',
-        'updateMany',
-        'delete',
-        'update',
-    ];
+const MUTATION_METHODS = new Set<MutationOperation>([
+    'delete',
+    'update',
+    'deleteMany',
+    'updateMany',
+]);
+const RAW_METHODS = new Set(['$executeRaw', '$executeRawUnsafe', '$queryRaw', '$queryRawUnsafe']);
 
-    private readonly RAW_METHODS = [
-        '$executeRaw',
-        '$executeRawUnsafe',
-        '$queryRaw',
-        '$queryRawUnsafe',
-    ];
+const SIMPLE_OPERATORS: Record<string, FilterOperator> = {
+    equals: 'eq',
+    not: 'neq',
+    gt: 'gt',
+    gte: 'gte',
+    lt: 'lt',
+    lte: 'lte',
+    in: 'in',
+};
 
-    public detect(document: DocumentLike): MutationInfo[] {
-        const sourceCode = document.getText();
-        const sourceFile = ts.createSourceFile(
-            document.fileName,
-            sourceCode,
-            ts.ScriptTarget.Latest,
-            true
+interface WhereAnalysis {
+    hasWhere: boolean;
+    filters: FilterCondition[];
+    complete: boolean;
+}
+
+function escapeLike(value: string): string {
+    return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * Detects Prisma Client mutations:
+ *   prisma.user.deleteMany({ where: … }), tx.post.update(…), this.prisma.user.delete(…)
+ *   prisma.$executeRaw`DELETE FROM …`
+ */
+export class PrismaDetector {
+    private readonly clientNames: Set<string>;
+
+    constructor(options: DetectorOptions) {
+        this.clientNames = new Set(options.prismaClientNames);
+    }
+
+    public inspectCall(node: ts.CallExpression): PartialMutation | null {
+        return this.inspectModelCall(node) ?? this.inspectRawCall(node);
+    }
+
+    public inspectTaggedTemplate(node: ts.TaggedTemplateExpression): PartialMutation | null {
+        const tag = unwrap(node.tag);
+        if (!ts.isPropertyAccessExpression(tag)) return null;
+        if (!RAW_METHODS.has(tag.name.text)) return null;
+        if (!this.isClient(tag.expression)) return null;
+        return this.fromRawSql(templateText(node.template));
+    }
+
+    private isClient(expr: ts.Expression): boolean {
+        const name = receiverName(expr);
+        return name !== undefined && this.clientNames.has(name);
+    }
+
+    private inspectModelCall(node: ts.CallExpression): PartialMutation | null {
+        const callee = unwrap(node.expression);
+        if (!ts.isPropertyAccessExpression(callee)) return null;
+        const method = callee.name.text as MutationOperation;
+        if (!MUTATION_METHODS.has(method)) return null;
+
+        const modelAccess = unwrap(callee.expression);
+        if (!ts.isPropertyAccessExpression(modelAccess)) return null;
+        const model = modelAccess.name.text;
+        if (model.startsWith('$')) return null;
+        if (!this.isClient(modelAccess.expression)) return null;
+
+        const arg = node.arguments[0] ? unwrap(node.arguments[0]) : undefined;
+        const argsObject = arg && ts.isObjectLiteralExpression(arg) ? arg : undefined;
+
+        // `delete` / `update` are common method names (Map#delete…): Prisma requires
+        // a `where` for them, so insist on seeing it to avoid false positives.
+        const whereProp = argsObject?.properties.find(
+            (p): p is ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
+                (ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) &&
+                propertyName(p.name) === 'where'
         );
+        const isSingle = method === 'delete' || method === 'update';
+        if (isSingle && !whereProp) return null;
 
-        const mutations: MutationInfo[] = [];
-
-        const visit = (node: ts.Node) => {
-            if (ts.isCallExpression(node)) {
-                const mutation = this.extractMutation(node, document);
-                if (mutation) {
-                    mutations.push(mutation);
-                }
-                const raw = this.extractRawMutation(node, document);
-                if (raw) {
-                    mutations.push(raw);
-                }
-            } else if (ts.isTaggedTemplateExpression(node)) {
-                const raw = this.extractRawMutation(node, document);
-                if (raw) {
-                    mutations.push(raw);
-                }
-            }
-            ts.forEachChild(node, visit);
-        };
-
-        visit(sourceFile);
-        return mutations;
-    }
-
-    // Extraer mutaciones de Prisma (prisma.user.deleteMany...)
-    private extractMutation(node: ts.CallExpression, document: DocumentLike): MutationInfo | null {
-        const expression = node.expression;
-        if (!ts.isPropertyAccessExpression(expression)) return null;
-
-        const methodName = expression.name.text;
-        if (!this.MUTATION_METHODS.includes(methodName as MutationOperation)) return null;
-
-        // Validar acceso a tabla (prisma.user)
-        const tableAccess = expression.expression;
-        if (!ts.isPropertyAccessExpression(tableAccess)) return null;
-        if (!ts.isIdentifier(tableAccess.expression) || tableAccess.expression.text !== 'prisma') {
-            return null;
+        let where: WhereAnalysis;
+        if (!arg) {
+            where = { hasWhere: false, filters: [], complete: true };
+        } else if (!argsObject) {
+            // deleteMany(args) with a variable: we can't see the filter.
+            where = { hasWhere: true, filters: [], complete: false };
+        } else if (argsObject.properties.some((p) => ts.isSpreadAssignment(p))) {
+            where = { hasWhere: true, filters: [], complete: false };
+        } else if (!whereProp) {
+            where = { hasWhere: false, filters: [], complete: true };
+        } else if (ts.isShorthandPropertyAssignment(whereProp)) {
+            where = { hasWhere: true, filters: [], complete: false };
+        } else {
+            where = this.analyzeWhere(whereProp.initializer);
         }
-
-        const tableName = tableAccess.name.text;
-
-        // Extraer filtros 'where' de los argumentos
-        let hasWhere = false;
-        let queryParams: { column: string; value: unknown }[] = [];
-
-        if (node.arguments.length > 0) {
-            const firstArg = node.arguments[0];
-            if (ts.isObjectLiteralExpression(firstArg)) {
-                const whereProp = firstArg.properties.find(
-                    (prop) =>
-                        ts.isPropertyAssignment(prop) &&
-                        ts.isIdentifier(prop.name) &&
-                        prop.name.text === 'where'
-                ) as ts.PropertyAssignment | undefined;
-
-                if (whereProp && ts.isObjectLiteralExpression(whereProp.initializer)) {
-                    hasWhere = true;
-                    queryParams = this.extractParams(whereProp.initializer);
-                }
-            }
-        }
-
-        const start = document.positionAt(node.getStart());
-        const end = document.positionAt(node.getEnd());
 
         return {
-            table: tableName,
-            operation: methodName as MutationOperation,
-            hasWhere,
-            queryParams,
-            range: { start, end },
-            sourceText: node.getText(),
+            orm: 'prisma',
+            operation: method,
+            table: { kind: 'prisma-model', name: model },
+            hasWhere: where.hasWhere,
+            filters: where.filters,
+            filtersComplete: where.complete,
         };
     }
 
-    // Extraer mutaciones de Prisma Raw ($executeRaw...)
-    private extractRawMutation(
-        node: ts.CallExpression | ts.TaggedTemplateExpression,
-        document: DocumentLike
-    ): MutationInfo | null {
-        const expression = ts.isCallExpression(node) ? node.expression : node.tag;
-        if (!ts.isPropertyAccessExpression(expression)) return null;
+    private inspectRawCall(node: ts.CallExpression): PartialMutation | null {
+        const callee = unwrap(node.expression);
+        if (!ts.isPropertyAccessExpression(callee)) return null;
+        if (!RAW_METHODS.has(callee.name.text)) return null;
+        if (!this.isClient(callee.expression)) return null;
+        const first = node.arguments[0];
+        return first ? this.fromRawSql(templateText(first)) : null;
+    }
 
-        const methodName = expression.name.text;
-        if (!this.RAW_METHODS.includes(methodName)) return null;
-
-        if (!ts.isIdentifier(expression.expression) || expression.expression.text !== 'prisma') {
-            return null;
-        }
-
-        // Intento de extraer nombre de tabla del SQL (best-effort)
-        let sqlText = '';
-        if (ts.isCallExpression(node) && node.arguments.length > 0) {
-            sqlText = node.arguments[0].getText();
-        } else if (ts.isTaggedTemplateExpression(node)) {
-            sqlText = node.template.getText();
-        }
-
-        let tableName = 'RAW_QUERY';
-        const tableMatch = sqlText.match(/(?:FROM|UPDATE|INTO)\s+["']?([a-zA-Z0-9_.]+)/i);
-        if (tableMatch) {
-            tableName = tableMatch[1];
-        }
-
-        const start = document.positionAt(node.getStart());
-        const end = document.positionAt(node.getEnd());
-
+    private fromRawSql(sql: string | undefined): PartialMutation | null {
+        if (sql === undefined) return null;
+        const raw = classifyRawSql(sql);
+        if (!raw) return null;
         return {
-            table: tableName,
-            operation: 'updateMany', // Tratamos como mutación múltiple por seguridad
-            hasWhere: false,
-            queryParams: [],
-            range: { start, end },
-            sourceText: node.getText(),
+            orm: 'raw-sql',
+            operation: raw.operation,
+            table: raw.table
+                ? { kind: 'sql-name', name: raw.table, schema: raw.schema }
+                : { kind: 'unknown', name: '(dynamic table)' },
+            hasWhere: raw.hasWhere,
+            filters: [],
+            filtersComplete: !raw.hasWhere,
+            truncateCascade: raw.truncateCascade,
         };
     }
 
-    // Extraer literales del objeto 'where' como parámetros seguros
-    private extractParams(node: ts.ObjectLiteralExpression): { column: string; value: unknown }[] {
-        const params: { column: string; value: unknown }[] = [];
-        for (const prop of node.properties) {
-            if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) continue;
-
-            const field = prop.name.text;
-            const value = prop.initializer;
-
-            if (ts.isStringLiteral(value)) {
-                params.push({ column: field, value: value.text });
-            } else if (ts.isNumericLiteral(value)) {
-                params.push({ column: field, value: Number(value.text) });
-            } else if (value.kind === ts.SyntaxKind.TrueKeyword) {
-                params.push({ column: field, value: true });
-            } else if (value.kind === ts.SyntaxKind.FalseKeyword) {
-                params.push({ column: field, value: false });
-            } else if (value.kind === ts.SyntaxKind.NullKeyword) {
-                params.push({ column: field, value: null });
-            }
+    private analyzeWhere(initializer: ts.Expression): WhereAnalysis {
+        const expr = unwrap(initializer);
+        if (!ts.isObjectLiteralExpression(expr)) {
+            // `where: someVariable` / `where: undefined`
+            const value = toFilterValue(expr);
+            if (value === undefined) return { hasWhere: false, filters: [], complete: true };
+            return { hasWhere: true, filters: [], complete: false };
         }
-        return params;
+        const result: WhereAnalysis = { hasWhere: false, filters: [], complete: true };
+        this.collectConditions(expr, result);
+        return result;
+    }
+
+    private collectConditions(obj: ts.ObjectLiteralExpression, out: WhereAnalysis): void {
+        for (const prop of obj.properties) {
+            if (ts.isShorthandPropertyAssignment(prop)) {
+                // `{ id }` → id = <id>
+                out.hasWhere = true;
+                out.filters.push({
+                    field: prop.name.text,
+                    operator: 'eq',
+                    value: { kind: 'expression', text: prop.name.text },
+                });
+                continue;
+            }
+            if (!ts.isPropertyAssignment(prop)) {
+                // spread, methods, accessors
+                out.hasWhere = true;
+                out.complete = false;
+                continue;
+            }
+            const key = propertyName(prop.name);
+            if (key === undefined) {
+                out.hasWhere = true;
+                out.complete = false;
+                continue;
+            }
+            const value = unwrap(prop.initializer);
+
+            if (key === 'AND') {
+                const items = ts.isArrayLiteralExpression(value) ? value.elements : [value];
+                for (const item of items) {
+                    const inner = unwrap(item);
+                    if (ts.isObjectLiteralExpression(inner)) {
+                        this.collectConditions(inner, out);
+                    } else {
+                        out.hasWhere = true;
+                        out.complete = false;
+                    }
+                }
+                continue;
+            }
+            if (key === 'OR' || key === 'NOT') {
+                out.hasWhere = true;
+                out.complete = false;
+                continue;
+            }
+
+            if (ts.isObjectLiteralExpression(value)) {
+                this.collectOperatorObject(key, value, out);
+                continue;
+            }
+
+            const filterValue = toFilterValue(value);
+            if (filterValue === undefined) continue; // Prisma ignores `field: undefined`
+            out.hasWhere = true;
+            out.filters.push(this.equality(key, filterValue));
+        }
+    }
+
+    private equality(field: string, value: FilterValue): FilterCondition {
+        if (value.kind === 'literal' && value.value === null) {
+            return { field, operator: 'isNull' };
+        }
+        return { field, operator: 'eq', value };
+    }
+
+    /** `{ email: { contains: 'x', mode: 'insensitive' } }`, `{ id: { in: [1, 2] } }`… */
+    private collectOperatorObject(
+        field: string,
+        obj: ts.ObjectLiteralExpression,
+        out: WhereAnalysis
+    ): void {
+        const entries = new Map<string, ts.Expression>();
+        for (const p of obj.properties) {
+            const key = ts.isPropertyAssignment(p) ? propertyName(p.name) : undefined;
+            if (!ts.isPropertyAssignment(p) || key === undefined) {
+                out.hasWhere = true;
+                out.complete = false;
+                return;
+            }
+            entries.set(key, p.initializer);
+        }
+        const insensitive = (() => {
+            const mode = entries.get('mode');
+            if (!mode) return false;
+            const v = toFilterValue(mode);
+            return v?.kind === 'literal' && v.value === 'insensitive';
+        })();
+        entries.delete('mode');
+
+        for (const [op, raw] of entries) {
+            const value = toFilterValue(raw);
+            if (value === undefined) continue; // `{ gt: undefined }` is ignored by Prisma
+            out.hasWhere = true;
+
+            if (op === 'equals' && insensitive) {
+                if (value.kind === 'literal' && typeof value.value === 'string') {
+                    out.filters.push({
+                        field,
+                        operator: 'ilike',
+                        value: { kind: 'literal', value: escapeLike(value.value) },
+                    });
+                } else {
+                    out.complete = false;
+                }
+                continue;
+            }
+
+            if (op === 'contains' || op === 'startsWith' || op === 'endsWith') {
+                if (value.kind === 'literal' && typeof value.value === 'string') {
+                    const escaped = escapeLike(value.value);
+                    const pattern =
+                        op === 'contains'
+                            ? `%${escaped}%`
+                            : op === 'startsWith'
+                              ? `${escaped}%`
+                              : `%${escaped}`;
+                    out.filters.push({
+                        field,
+                        operator: insensitive ? 'ilike' : 'like',
+                        value: { kind: 'literal', value: pattern },
+                    });
+                } else {
+                    out.complete = false;
+                }
+                continue;
+            }
+
+            const operator = SIMPLE_OPERATORS[op];
+            if (!operator) {
+                // notIn, relation filters (some/every/is), json filters…
+                out.complete = false;
+                continue;
+            }
+            if (ts.isObjectLiteralExpression(unwrap(raw))) {
+                // `not: { … }` nested filter
+                out.complete = false;
+                continue;
+            }
+            if (insensitive) {
+                // Case-insensitive comparison operators are not translated.
+                out.complete = false;
+                continue;
+            }
+            if (value.kind === 'literal' && value.value === null) {
+                if (operator === 'eq') out.filters.push({ field, operator: 'isNull' });
+                else if (operator === 'neq') out.filters.push({ field, operator: 'isNotNull' });
+                else out.complete = false;
+                continue;
+            }
+            if (operator === 'in' && value.kind === 'literal' && !Array.isArray(value.value)) {
+                out.complete = false;
+                continue;
+            }
+            out.filters.push({ field, operator, value });
+        }
     }
 }

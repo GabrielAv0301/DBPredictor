@@ -6,61 +6,111 @@ on:
     pull_request:
         branches: [main]
 
+permissions:
+    contents: read
+
+concurrency:
+    group: ci-${{ github.ref }}
+    cancel-in-progress: true
+
 jobs:
-    lint:
+    static:
+        name: Lint, format & typecheck
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: '20'
-                  cache: 'npm'
-                  cache-dependency-path: package-lock.json
-            - name: Install dependencies
-              run: npm ci
-            - name: Run lint
-              run: npm run lint
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run lint
+            - run: npm run format:check
+            - run: npm run typecheck
 
-    typecheck:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: '20'
-                  cache: 'npm'
-                  cache-dependency-path: package-lock.json
-            - name: Install dependencies
-              run: npm ci
-            - name: Run typecheck
-              run: npx tsc --noEmit
-
-    test:
-        needs: [lint, typecheck]
-        runs-on: ${{ matrix.os }}
+    unit:
+        name: Unit tests (${{ matrix.os }})
+        needs: static
         strategy:
             fail-fast: false
             matrix:
                 os: [ubuntu-latest, windows-latest, macos-latest]
+        runs-on: ${{ matrix.os }}
         steps:
             - uses: actions/checkout@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: '20'
-                  cache: 'npm'
-                  cache-dependency-path: package-lock.json
-            - name: Cache webview dependencies
-              uses: actions/cache@v4
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run test:coverage
+
+    integration:
+        name: PostgreSQL ${{ matrix.postgres }} integration
+        needs: static
+        strategy:
+            fail-fast: false
+            matrix:
+                postgres: ['13', '17']
+        runs-on: ubuntu-latest
+        services:
+            postgres:
+                image: postgres:${{ matrix.postgres }}-alpine
+                env:
+                    POSTGRES_PASSWORD: qgtest
+                    POSTGRES_DB: qgtest
+                ports: ['5432:5432']
+                options: >-
+                    --health-cmd "pg_isready -U postgres"
+                    --health-interval 5s --health-timeout 5s --health-retries 10
+        env:
+            QG_TEST_DATABASE_URL: postgresql://postgres:qgtest@localhost:5432/qgtest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
               with:
-                  path: webview-ui/node_modules
-                  key: webview-${{ hashFiles('webview-ui/package-lock.json') }}
-                  restore-keys: |
-                      webview-
-            - name: Install root dependencies
-              run: npm ci
-            - name: Install webview dependencies
-              run: npm ci --prefix webview-ui
-            - name: Compile extension
-              run: npm run compile
-            - name: Run tests with coverage
-              run: npx c8 --reporter=text npm test
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run build:prod
+            - name: Integration tests (bundled worker)
+              run: npm run test:integration
+              env:
+                  QG_WORKER_PATH: ${{ github.workspace }}/out/db.worker.js
+
+    e2e:
+        name: VS Code ${{ matrix.vscode }} end-to-end
+        needs: static
+        strategy:
+            fail-fast: false
+            matrix:
+                vscode: ['1.85.0', 'stable']
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run build:prod
+            - run: xvfb-run -a npm run test:e2e
+              env:
+                  QG_VSCODE_VERSION: ${{ matrix.vscode }}
+
+    package:
+        name: Package .vsix
+        needs: [unit, integration, e2e]
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run package
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: vsix
+                  path: '*.vsix'
