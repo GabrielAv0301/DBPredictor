@@ -1,421 +1,130 @@
-import React, { useEffect, useState } from 'react';
-import { useVSCodeMessage } from './hooks/useVSCodeMessage';
-import { RiskBadge } from './components/RiskBadge';
-import { ImpactBar } from './components/ImpactBar';
-import { CascadeTree } from './components/CascadeTree';
-import { BlastRadiusChart } from './components/BlastRadiusChart';
-import { CascadeTreeMap } from './components/CascadeTreeMap';
+import { History, Zap } from 'lucide-react';
+import { useEffect, useReducer, type ReactNode } from 'react';
+import type {
+    ConnectionInfo,
+    HistoryEntry,
+    ImpactSummary,
+    SimulationReport,
+    ToWebviewMessage,
+} from '../../src/shared/types';
 import { HistoryView } from './components/HistoryView';
-import { Database, AlertCircle, Info, LayoutDashboard, History, Zap } from 'lucide-react';
-import { HistoryEntry, ImpactResult } from './types/shared';
+import { ImpactView } from './components/ImpactView';
+import { loadState, post, saveState, type PersistedState } from './vscode';
 
-type Tab = 'current' | 'history';
-
-function formatStaleness(isoDate: string | null | undefined): string {
-    if (!isoDate) return 'unknown';
-    const ms = Date.now() - new Date(isoDate).getTime();
-    const hours = ms / (1000 * 60 * 60);
-    if (hours < 1) return 'recent';
-    if (hours < 24) return `${Math.floor(hours)}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
+interface State {
+    tab: PersistedState['tab'];
+    impact: ImpactSummary | null;
+    connection: ConnectionInfo;
+    history: HistoryEntry[];
+    simulating: boolean;
+    report: SimulationReport | undefined;
 }
 
-function getStalenessColor(staleness: string): string {
-    if (staleness === 'recent' || staleness === 'unknown') return 'var(--vscode-charts-lines)';
-    return 'var(--vscode-editorWarning-foreground)';
+type Action = ToWebviewMessage | { type: 'tab'; tab: PersistedState['tab'] };
+
+function sameMutation(a: ImpactSummary | null, b: ImpactSummary | null): boolean {
+    return !!a && !!b && a.file === b.file && a.key === b.key;
 }
 
-const App: React.FC = () => {
-    const { lastMessage, postMessage } = useVSCodeMessage();
-    const [activeTab, setActiveTab] = useState<Tab>('current');
-    const [history, setHistory] = useState<HistoryEntry[]>([]);
-    const [impact, setImpact] = useState<ImpactResult | null>(null);
-    const [simulationResult, setSimulationResult] = useState<number | null>(null);
-    const [simulationWarn, setSimulationWarn] = useState<string | null>(null);
-    const [isConnected, setIsConnected] = useState(true);
+function reducer(state: State, action: Action): State {
+    switch (action.type) {
+        case 'tab':
+            return { ...state, tab: action.tab };
+        case 'impact': {
+            const keep = sameMutation(state.impact, action.impact);
+            return {
+                ...state,
+                impact: action.impact,
+                connection: action.connection,
+                report: keep ? state.report : undefined,
+                simulating: keep ? state.simulating : false,
+                tab: keep ? state.tab : 'impact',
+            };
+        }
+        case 'connection':
+            return { ...state, connection: action.connection };
+        case 'history':
+            return { ...state, history: action.entries };
+        case 'simulationStarted':
+            return { ...state, simulating: true };
+        case 'simulationFinished':
+            return { ...state, simulating: false, report: action.report };
+        default:
+            return state;
+    }
+}
+
+const MESSAGE_TYPES = new Set([
+    'impact',
+    'connection',
+    'history',
+    'simulationStarted',
+    'simulationFinished',
+]);
+
+export function App() {
+    const [state, dispatch] = useReducer(reducer, undefined, () => ({
+        tab: loadState().tab,
+        impact: null,
+        connection: { connected: false },
+        history: [],
+        simulating: false,
+        report: undefined,
+    }));
 
     useEffect(() => {
-        postMessage({ type: 'WEBVIEW_READY' });
-    }, [postMessage]);
+        const onMessage = (event: MessageEvent<unknown>) => {
+            const data = event.data as { type?: unknown } | null;
+            if (data && typeof data.type === 'string' && MESSAGE_TYPES.has(data.type)) {
+                dispatch(data as ToWebviewMessage);
+            }
+        };
+        window.addEventListener('message', onMessage);
+        // Announce readiness exactly once, after the listener is in place.
+        post({ type: 'ready' });
+        return () => window.removeEventListener('message', onMessage);
+    }, []);
 
-    useEffect(() => {
-        if (!lastMessage) return;
+    useEffect(() => saveState({ tab: state.tab }), [state.tab]);
 
-        switch (lastMessage.type) {
-            case 'UPDATE_IMPACT':
-                setImpact(lastMessage.data);
-                setSimulationResult(null); // Reset simulation on new impact
-                setSimulationWarn(null);
-                break;
-            case 'UPDATE_HISTORY':
-                setHistory(lastMessage.data);
-                break;
-            case 'SIMULATION_RESULT':
-                setSimulationResult(lastMessage.rowCount);
-                setSimulationWarn(lastMessage.warnCascade || null);
-                break;
-            case 'CONNECTION_STATUS':
-                setIsConnected(lastMessage.data.isConnected);
-                break;
-        }
-    }, [lastMessage]);
-
-    const clearHistory = () => {
-        postMessage({ type: 'CLEAR_HISTORY' });
-    };
-
-    const runSimulation = () => {
-        if (impact) {
-            postMessage({ type: 'SIMULATE', data: impact });
-        }
-    };
-
-    const exportHistory = (format: 'json' | 'csv') => {
-        postMessage({ type: 'EXPORT_HISTORY', format });
-    };
+    const tab = (name: PersistedState['tab'], label: string, icon: ReactNode) => (
+        <button
+            role="tab"
+            aria-selected={state.tab === name}
+            className={`tab ${state.tab === name ? 'active' : ''}`}
+            onClick={() => dispatch({ type: 'tab', tab: name })}
+        >
+            {icon}
+            {label}
+        </button>
+    );
 
     return (
-        <div className="app-container">
-            {!isConnected && (
-                <div
-                    style={{
-                        background: 'var(--vscode-notificationBackground)',
-                        border: '1px solid var(--vscode-notificationBorder)',
-                        padding: '8px 12px',
-                        marginBottom: '16px',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        color: 'var(--vscode-notificationForeground)',
-                    }}
-                >
-                    <AlertCircle size={16} />
-                    <span>Disconnected from database. Some data may be stale.</span>
-                    <button
-                        onClick={() =>
-                            (window as any).vscode.postMessage({ type: 'RECONNECT_PROMPT' })
-                        }
-                        style={{
-                            marginLeft: 'auto',
-                            padding: '4px 12px',
-                            cursor: 'pointer',
-                            background: 'var(--vscode-button-background)',
-                            color: 'var(--vscode-button-foreground)',
-                            border: 'none',
-                            borderRadius: '2px',
-                        }}
-                    >
-                        Reconnect
-                    </button>
-                </div>
-            )}
-
-            <nav
-                style={{
-                    display: 'flex',
-                    gap: '20px',
-                    marginBottom: '20px',
-                    borderBottom: '1px solid var(--vscode-widget-border)',
-                }}
-            >
-                <button
-                    onClick={() => setActiveTab('current')}
-                    style={{
-                        padding: '8px 12px',
-                        background: 'none',
-                        border: 'none',
-                        borderBottom:
-                            activeTab === 'current'
-                                ? '2px solid var(--vscode-button-background)'
-                                : 'none',
-                        color:
-                            activeTab === 'current' ? 'var(--vscode-button-background)' : 'inherit',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                    }}
-                >
-                    <Zap size={16} /> Analysis
-                </button>
-                <button
-                    onClick={() => setActiveTab('history')}
-                    style={{
-                        padding: '8px 12px',
-                        background: 'none',
-                        border: 'none',
-                        borderBottom:
-                            activeTab === 'history'
-                                ? '2px solid var(--vscode-button-background)'
-                                : 'none',
-                        color:
-                            activeTab === 'history' ? 'var(--vscode-button-background)' : 'inherit',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                    }}
-                >
-                    <History size={16} /> History
-                </button>
+        <main className="app">
+            <nav className="tabs" role="tablist">
+                {tab('impact', 'Impact', <Zap size={14} />)}
+                {tab('history', `History (${state.history.length})`, <History size={14} />)}
+                <span className="spacer" />
+                <span className={`connection ${state.connection.connected ? 'on' : 'off'}`}>
+                    {state.connection.connected
+                        ? `● ${state.connection.profileName ?? 'connected'}`
+                        : '○ not connected'}
+                </span>
             </nav>
-
-            {activeTab === 'current' ? (
-                impact ? (
-                    <div>
-                        <header
-                            style={{
-                                marginBottom: '24px',
-                                borderBottom: '1px solid var(--vscode-widget-border)',
-                                paddingBottom: '16px',
-                            }}
-                        >
-                            <div
-                                className="flex-row"
-                                style={{ justifyContent: 'space-between', marginBottom: '12px' }}
-                            >
-                                <h1 className="title" style={{ margin: 0 }}>
-                                    Impact Analysis: {impact.table}
-                                </h1>
-                                <RiskBadge level={impact.riskLevel} />
-                            </div>
-                            <div className="flex-row subtitle">
-                                <Info size={14} />
-                                <span>
-                                    Operation: <code>{impact.operation}</code>
-                                </span>
-                                {impact.estimationQuality === 'worst-case' && (
-                                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                                        <span
-                                            title="This number is based on PostgreSQL internal catalog statistics (n_live_tup). These statistics can be slightly outdated until an ANALYZE or autovacuum runs. Click 'Simulate' for 100% exact live counts."
-                                            style={{
-                                                marginLeft: '12px',
-                                                background: 'var(--vscode-badge-background)',
-                                                color: 'var(--vscode-badge-foreground)',
-                                                padding: '2px 8px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.65rem',
-                                                fontWeight: 'bold',
-                                                cursor: 'help',
-                                                border: '1px solid var(--vscode-button-background)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                            }}
-                                        >
-                                            <Info size={10} />
-                                            WORST CASE ESTIMATION
-                                        </span>
-                                        {impact.statsLastUpdated && (
-                                            <span
-                                                style={{
-                                                    marginLeft: '8px',
-                                                    color: getStalenessColor(
-                                                        formatStaleness(impact.statsLastUpdated)
-                                                    ),
-                                                    fontSize: '0.65rem',
-                                                    opacity: 0.8,
-                                                }}
-                                            >
-                                                Stats: {formatStaleness(impact.statsLastUpdated)}
-                                            </span>
-                                        )}
-                                    </div>
-                                )}
-                                <button
-                                    onClick={runSimulation}
-                                    disabled={simulationResult !== null}
-                                    style={{
-                                        marginLeft: 'auto',
-                                        background:
-                                            simulationResult === null
-                                                ? 'var(--vscode-button-background)'
-                                                : 'var(--vscode-button-secondaryBackground)',
-                                        color:
-                                            simulationResult === null
-                                                ? 'var(--vscode-button-foreground)'
-                                                : 'var(--vscode-button-secondaryForeground)',
-                                        border: 'none',
-                                        borderRadius: '2px',
-                                        padding: '6px 16px',
-                                        cursor: simulationResult === null ? 'pointer' : 'default',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '6px',
-                                        fontSize: '0.75rem',
-                                        fontWeight: 'bold',
-                                        boxShadow:
-                                            simulationResult === null
-                                                ? '0 2px 4px rgba(0,0,0,0.2)'
-                                                : 'none',
-                                        transition: 'all 0.2s ease',
-                                    }}
-                                >
-                                    <Zap
-                                        size={14}
-                                        fill={simulationResult === null ? 'currentColor' : 'none'}
-                                    />
-                                    {simulationResult === null
-                                        ? 'RUN EXACT SIMULATION'
-                                        : 'SIMULATION COMPLETE'}
-                                </button>
-                            </div>
-                            {simulationResult !== null && (
-                                <div>
-                                    <div
-                                        style={{
-                                            marginTop: '12px',
-                                            padding: '8px 12px',
-                                            background: 'var(--vscode-editor-selectionBackground)',
-                                            borderLeft: '4px solid var(--vscode-button-background)',
-                                            borderRadius: '4px',
-                                            fontSize: '0.8rem',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '8px',
-                                        }}
-                                    >
-                                        <Zap size={14} color="var(--vscode-button-background)" />
-                                        <span>
-                                            Simulation Result:{' '}
-                                            <strong>
-                                                {simulationResult.toLocaleString()} rows affected
-                                            </strong>{' '}
-                                            (No data modified)
-                                        </span>
-                                    </div>
-                                    {simulationWarn && (
-                                        <div
-                                            style={{
-                                                marginTop: '8px',
-                                                color: 'var(--vscode-editorWarning-foreground)',
-                                                fontSize: '0.75rem',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '6px',
-                                            }}
-                                        >
-                                            <AlertCircle size={14} />
-                                            <span>{simulationWarn}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </header>
-
-                        <div
-                            className="dashboard-grid"
-                            style={{
-                                display: 'grid',
-                                gridTemplateColumns: '1fr 1.5fr',
-                                gap: '16px',
-                                marginBottom: '24px',
-                            }}
-                        >
-                            <section className="card" style={{ margin: 0 }}>
-                                <h2
-                                    className="subtitle"
-                                    style={{ fontWeight: 'bold', fontSize: '0.7rem' }}
-                                >
-                                    BLAST RADIUS
-                                </h2>
-                                <BlastRadiusChart
-                                    affected={impact.baseRowsAffected}
-                                    total={impact.tableTotalRows}
-                                />
-                            </section>
-
-                            <section className="card" style={{ margin: 0 }}>
-                                <h2
-                                    className="subtitle"
-                                    style={{ fontWeight: 'bold', fontSize: '0.7rem' }}
-                                >
-                                    DIRECT IMPACT
-                                </h2>
-                                <ImpactBar
-                                    label={impact.table}
-                                    affected={impact.baseRowsAffected}
-                                    total={impact.tableTotalRows}
-                                    quality={impact.estimationQuality}
-                                />
-                                {impact.riskLevel === 'DESTRUCTIVE' && (
-                                    <div
-                                        className="flex-row destructive-text"
-                                        style={{ marginTop: '8px', fontSize: '0.8rem' }}
-                                    >
-                                        <AlertCircle size={14} />
-                                        <span>DANGER: This affects 100% of the table.</span>
-                                    </div>
-                                )}
-                            </section>
-                        </div>
-
-                        {impact.cascadeChain.length > 0 && (
-                            <section className="card">
-                                <h2
-                                    className="subtitle"
-                                    style={{
-                                        fontWeight: 'bold',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px',
-                                    }}
-                                >
-                                    <LayoutDashboard size={16} />
-                                    CASCADE VISUALIZATION
-                                </h2>
-                                <CascadeTreeMap results={impact.cascadeChain} />
-                                <div style={{ marginTop: '24px' }}>
-                                    <h2
-                                        className="subtitle"
-                                        style={{ fontWeight: 'bold', fontSize: '0.7rem' }}
-                                    >
-                                        DETAILED FK CHAIN
-                                    </h2>
-                                    <CascadeTree results={impact.cascadeChain} />
-                                </div>
-                            </section>
-                        )}
-                    </div>
-                ) : (
-                    <div
-                        className="flex-row"
-                        style={{
-                            height: '60vh',
-                            flexDirection: 'column',
-                            justifyContent: 'center',
-                            opacity: 0.6,
-                        }}
-                    >
-                        <Database size={48} />
-                        <p>Select a mutation in your code to see impact analysis.</p>
-                    </div>
-                )
-            ) : (
-                <HistoryView
-                    history={history}
-                    onClear={clearHistory}
-                    onExport={(format) => exportHistory(format)}
+            {state.tab === 'impact' ? (
+                <ImpactView
+                    impact={state.impact}
+                    connection={state.connection}
+                    simulating={state.simulating}
+                    report={state.report}
                 />
+            ) : (
+                <HistoryView entries={state.history} />
             )}
-
-            <footer
-                style={{
-                    marginTop: '32px',
-                    padding: '16px',
-                    opacity: 0.7,
-                    fontSize: '0.8rem',
-                    borderTop: '1px solid var(--vscode-widget-border)',
-                }}
-            >
-                <p>
-                    Estimations are based on <code>pg_stat_user_tables</code>. Real impact may vary
-                    depending on active transactions.
-                </p>
+            <footer className="muted small">
+                Estimates use PostgreSQL planner statistics and may be outdated; the exact count
+                queries live data.
             </footer>
-        </div>
+        </main>
     );
-};
-
-export default App;
+}

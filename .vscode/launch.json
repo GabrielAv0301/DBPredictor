@@ -5,22 +5,22 @@
             "name": "Run Extension",
             "type": "extensionHost",
             "request": "launch",
-            "runtimeExecutable": "${execPath}",
             "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
             "outFiles": ["${workspaceFolder}/out/**/*.js"],
-            "preLaunchTask": "${defaultBuildTask}"
+            "preLaunchTask": "npm: build"
         },
         {
-            "name": "Extension Tests",
+            "name": "E2E Tests (current VS Code)",
             "type": "extensionHost",
             "request": "launch",
-            "runtimeExecutable": "${execPath}",
             "args": [
+                "${workspaceFolder}/test/e2e/fixture",
+                "--disable-extensions",
                 "--extensionDevelopmentPath=${workspaceFolder}",
-                "--extensionTestsPath=${workspaceFolder}/out/test/suite/index"
+                "--extensionTestsPath=${workspaceFolder}/out/test-build/test/e2e/suite/index"
             ],
-            "outFiles": ["${workspaceFolder}/out/test/**/*.js"],
-            "preLaunchTask": "${defaultBuildTask}"
+            "outFiles": ["${workspaceFolder}/out/**/*.js"],
+            "preLaunchTask": "npm: pretest"
         }
     ]
 }

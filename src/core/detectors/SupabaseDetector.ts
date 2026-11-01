@@ -1,121 +1,174 @@
 import * as ts from 'typescript';
-import {
-    MutationInfo,
-    MutationDetector,
-    MutationOperation,
-    DocumentLike,
-} from './DetectorInterface';
-import { getCallChain } from '../../utils/ast';
+import { getCallChain, propertyName, toFilterValue, unwrap, type ChainCall } from '../analysis/ast';
+import type { FilterCondition, FilterOperator } from './types';
+import type { PartialMutation } from './shared';
 
-export class SupabaseDetector implements MutationDetector {
-    private readonly TARGET_METHODS = ['delete', 'update'];
+const OPERATION_METHODS = new Set(['delete', 'update']);
 
-    public detect(document: DocumentLike): MutationInfo[] {
-        const sourceCode = document.getText();
-        const sourceFile = ts.createSourceFile(
-            document.fileName,
-            sourceCode,
-            ts.ScriptTarget.Latest,
-            true
-        );
+const BINARY_FILTERS: Record<string, FilterOperator> = {
+    eq: 'eq',
+    neq: 'neq',
+    gt: 'gt',
+    gte: 'gte',
+    lt: 'lt',
+    lte: 'lte',
+    like: 'like',
+    ilike: 'ilike',
+    in: 'in',
+};
 
-        const mutations: MutationInfo[] = [];
+/** Modifiers that don't change which rows are affected. */
+const NEUTRAL_METHODS = new Set([
+    'select',
+    'single',
+    'maybeSingle',
+    'order',
+    'limit',
+    'returns',
+    'overrideTypes',
+    'throwOnError',
+    'abortSignal',
+    'csv',
+    'geojson',
+    'explain',
+    'setHeader',
+    'then',
+    'catch',
+    'finally',
+]);
 
-        const visit = (node: ts.Node) => {
-            if (ts.isCallExpression(node)) {
-                // Evitamos doble conteo en cadenas como .from().delete().eq()
-                const isPartOfChain =
-                    ts.isPropertyAccessExpression(node.parent) &&
-                    ts.isCallExpression(node.parent?.parent);
+interface FilterState {
+    hasWhere: boolean;
+    complete: boolean;
+    filters: FilterCondition[];
+}
 
-                if (!isPartOfChain) {
-                    const mutation = this.extractSupabaseMutation(node, document);
-                    if (mutation) {
-                        mutations.push(mutation);
-                    }
-                }
-            }
-            ts.forEachChild(node, visit);
-        };
-        visit(sourceFile);
-        return mutations;
-    }
+/** Plain column name; JSON paths (`data->a`) and casts are not translated. */
+function columnName(node: ts.Expression | undefined): string | undefined {
+    if (!node) return undefined;
+    const value = toFilterValue(node);
+    if (value?.kind !== 'literal' || typeof value.value !== 'string') return undefined;
+    return /^[\w$]+$/.test(value.value) ? value.value : undefined;
+}
 
-    // Extraer mutaciones de cadenas de Supabase (.from().delete()...)
-    private extractSupabaseMutation(
-        node: ts.CallExpression,
-        document: DocumentLike
-    ): MutationInfo | null {
-        const { chain } = getCallChain(node);
+/**
+ * Detects supabase-js mutations:
+ *   supabase.from('users').delete().eq('id', 1)
+ *   supabase.schema('billing').from('invoices').update({...}).lt('due', date)
+ */
+export class SupabaseDetector {
+    public inspectCall(node: ts.CallExpression): PartialMutation | null {
+        const { calls } = getCallChain(node);
+        const fromIndex = calls.findIndex((c) => c.name === 'from');
+        if (fromIndex < 0) return null;
+        const opCall = calls[fromIndex + 1];
+        // The operation must come right after `.from()` in supabase-js.
+        if (!opCall || !OPERATION_METHODS.has(opCall.name)) return null;
 
-        // Buscamos una cadena que tenga .from('tabla') y .delete() o .update()
-        const fromCall = chain?.find((c) => c.name === 'from');
-        const opCall = chain?.find((c) => this.TARGET_METHODS.includes(c.name));
+        const table = columnName(calls[fromIndex].args[0]);
+        if (!table) return null;
 
-        if (!fromCall || !opCall) return null;
+        const schemaCall = calls.slice(0, fromIndex).find((c) => c.name === 'schema');
+        const schema = schemaCall ? columnName(schemaCall.args[0]) : undefined;
 
-        // Nombre de tabla desde from('nombre_tabla')
-        if (fromCall.args?.length === 0 || !ts.isStringLiteral(fromCall.args?.[0])) return null;
-        const tableName = fromCall.args[0].text;
-
-        // Filtros (cláusula where parametrizada)
-        const filterCalls = chain?.filter(
-            (c) => ['eq', 'match'].includes(c.name) // v1.1 soporta eq y match para simulación segura
-        );
-
-        let queryParams: { column: string; value: unknown }[] = [];
-        if (filterCalls && filterCalls.length > 0) {
-            queryParams = this.buildParams(filterCalls);
+        const state: FilterState = { hasWhere: false, complete: true, filters: [] };
+        for (const call of calls.slice(fromIndex + 2)) {
+            this.applyFilter(call, state);
         }
 
-        const start = document.positionAt(node.getStart());
-        const end = document.positionAt(node.getEnd());
-
         return {
-            table: tableName,
-            operation: (opCall.name === 'delete'
-                ? 'deleteMany'
-                : 'updateMany') as MutationOperation,
-            hasWhere: queryParams.length > 0,
-            queryParams,
-            range: { start, end },
-            sourceText: node.getText(),
+            orm: 'supabase',
+            operation: opCall.name === 'delete' ? 'deleteMany' : 'updateMany',
+            table: { kind: 'sql-name', name: table, schema },
+            hasWhere: state.hasWhere,
+            filters: state.filters,
+            filtersComplete: state.complete,
         };
     }
 
-    // Construir parámetros a partir de los filtros (.eq, .match...)
-    private buildParams(
-        filters: { name: string; args: ts.NodeArray<ts.Expression> }[]
-    ): { column: string; value: unknown }[] {
-        const params: { column: string; value: unknown }[] = [];
-        filters.forEach((f) => {
-            if (f.name === 'eq' && f.args?.length >= 2) {
-                const col = ts.isStringLiteral(f.args[0]) ? f.args[0].text : f.args[0].getText();
-                const valNode = f.args[1];
-                params.push({ column: col, value: this.parseValue(valNode) });
-            }
-            if (
-                f.name === 'match' &&
-                f.args?.length >= 1 &&
-                ts.isObjectLiteralExpression(f.args[0])
-            ) {
-                f.args[0].properties.forEach((p) => {
-                    if (ts.isPropertyAssignment(p)) {
-                        const name = ts.isStringLiteral(p.name) ? p.name.text : p.name.getText();
-                        params.push({ column: name, value: this.parseValue(p.initializer) });
-                    }
-                });
-            }
-        });
-        return params;
-    }
+    private applyFilter(call: ChainCall, state: FilterState): void {
+        const { name, args } = call;
+        if (NEUTRAL_METHODS.has(name)) return;
 
-    private parseValue(node: ts.Node): unknown {
-        if (ts.isStringLiteral(node)) return node.text;
-        if (ts.isNumericLiteral(node)) return Number(node.text);
-        if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
-        if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
-        if (node.kind === ts.SyntaxKind.NullKeyword) return null;
-        return node.getText();
+        const binary = BINARY_FILTERS[name];
+        if (binary) {
+            state.hasWhere = true;
+            const field = columnName(args[0]);
+            const value = args[1] ? toFilterValue(args[1]) : undefined;
+            if (!field || !value) {
+                state.complete = false;
+                return;
+            }
+            if (value.kind === 'literal' && value.value === null) {
+                // PostgREST `eq.null` compares with = NULL, which matches nothing.
+                state.complete = false;
+                return;
+            }
+            if (binary === 'in' && value.kind === 'literal' && !Array.isArray(value.value)) {
+                state.complete = false;
+                return;
+            }
+            state.filters.push({ field, operator: binary, value });
+            return;
+        }
+
+        if (name === 'is') {
+            state.hasWhere = true;
+            const field = columnName(args[0]);
+            const value = args[1] ? toFilterValue(args[1]) : undefined;
+            if (field && value?.kind === 'literal' && value.value === null) {
+                state.filters.push({ field, operator: 'isNull' });
+            } else if (field && value?.kind === 'literal' && typeof value.value === 'boolean') {
+                state.filters.push({ field, operator: 'eq', value });
+            } else {
+                state.complete = false;
+            }
+            return;
+        }
+
+        if (name === 'match') {
+            const arg = args[0] ? unwrap(args[0]) : undefined;
+            if (!arg || !ts.isObjectLiteralExpression(arg)) {
+                state.hasWhere = true;
+                state.complete = false;
+                return;
+            }
+            // `.match({})` adds no condition at all.
+            if (arg.properties.length > 0) state.hasWhere = true;
+            for (const p of arg.properties) {
+                const key = ts.isPropertyAssignment(p) ? propertyName(p.name) : undefined;
+                const value = ts.isPropertyAssignment(p) ? toFilterValue(p.initializer) : undefined;
+                if (!key || !value || (value.kind === 'literal' && value.value === null)) {
+                    state.complete = false;
+                    continue;
+                }
+                state.filters.push({ field: key, operator: 'eq', value });
+            }
+            return;
+        }
+
+        if (name === 'not') {
+            state.hasWhere = true;
+            const field = columnName(args[0]);
+            const op = args[1] ? toFilterValue(args[1]) : undefined;
+            const value = args[2] ? toFilterValue(args[2]) : undefined;
+            if (
+                field &&
+                op?.kind === 'literal' &&
+                op.value === 'is' &&
+                value?.kind === 'literal' &&
+                value.value === null
+            ) {
+                state.filters.push({ field, operator: 'isNotNull' });
+            } else {
+                state.complete = false;
+            }
+            return;
+        }
+
+        // Every other PostgrestFilterBuilder method (or, filter, contains, textSearch…)
+        // restricts rows but is not translated to SQL.
+        state.hasWhere = true;
+        state.complete = false;
     }
 }

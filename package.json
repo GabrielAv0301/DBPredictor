@@ -1,32 +1,50 @@
 {
     "name": "db-predictor",
     "displayName": "QueryGuard",
-    "description": "Real-time Database Safety Analyzer for Prisma, Supabase and Drizzle.",
-    "version": "1.2.1",
+    "description": "See how many rows a Prisma, Drizzle, Supabase or raw SQL delete/update will touch — including foreign-key cascades — before you run it. PostgreSQL.",
+    "version": "2.0.0",
     "publisher": "queryguard",
+    "author": {
+        "name": "Gabriel Silva Avila"
+    },
+    "license": "MIT",
     "icon": "assets/icon.png",
+    "galleryBanner": {
+        "color": "#0b1d2a",
+        "theme": "dark"
+    },
+    "pricing": "Free",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/GabrielAv0301/DBPredictor.git"
+    },
+    "homepage": "https://github.com/GabrielAv0301/DBPredictor#readme",
+    "bugs": {
+        "url": "https://github.com/GabrielAv0301/DBPredictor/issues"
+    },
     "engines": {
         "vscode": "^1.85.0"
     },
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/queryguard/db-predictor.git"
-    },
-    "homepage": "https://github.com/queryguard/db-predictor",
-    "bugs": {
-        "url": "https://github.com/queryguard/db-predictor/issues"
-    },
     "categories": [
         "Linters",
-        "Programming Languages"
+        "Programming Languages",
+        "Other"
     ],
     "keywords": [
-        "database",
-        "safety",
+        "postgresql",
+        "postgres",
         "prisma",
+        "drizzle",
         "supabase",
-        "drizzle"
+        "sql",
+        "database",
+        "orm",
+        "delete",
+        "cascade",
+        "foreign key",
+        "safety",
+        "linter",
+        "codelens"
     ],
     "main": "./out/extension.js",
     "activationEvents": [
@@ -35,141 +53,278 @@
         "onLanguage:javascript",
         "onLanguage:javascriptreact"
     ],
+    "extensionKind": [
+        "workspace"
+    ],
+    "capabilities": {
+        "untrustedWorkspaces": {
+            "supported": true
+        },
+        "virtualWorkspaces": {
+            "supported": "limited",
+            "description": "ORM definitions are only indexed from files on disk."
+        }
+    },
     "contributes": {
+        "commands": [
+            {
+                "command": "queryguard.connect",
+                "title": "Connect to Database…",
+                "category": "QueryGuard",
+                "icon": "$(plug)"
+            },
+            {
+                "command": "queryguard.disconnect",
+                "title": "Disconnect",
+                "category": "QueryGuard",
+                "icon": "$(debug-disconnect)"
+            },
+            {
+                "command": "queryguard.refreshSchema",
+                "title": "Refresh Database Schema",
+                "category": "QueryGuard",
+                "icon": "$(refresh)"
+            },
+            {
+                "command": "queryguard.showImpactPanel",
+                "title": "Show Impact Analysis",
+                "category": "QueryGuard",
+                "icon": "$(graph)"
+            },
+            {
+                "command": "queryguard.simulate",
+                "title": "Count Affected Rows (Read-Only)",
+                "category": "QueryGuard",
+                "icon": "$(play)"
+            },
+            {
+                "command": "queryguard.showMenu",
+                "title": "Show Menu",
+                "category": "QueryGuard"
+            },
+            {
+                "command": "queryguard.showLogs",
+                "title": "Show Logs",
+                "category": "QueryGuard",
+                "icon": "$(output)"
+            }
+        ],
+        "menus": {
+            "commandPalette": [
+                {
+                    "command": "queryguard.disconnect",
+                    "when": "queryguard.connected"
+                },
+                {
+                    "command": "queryguard.refreshSchema",
+                    "when": "queryguard.connected"
+                },
+                {
+                    "command": "queryguard.showImpactPanel",
+                    "when": "editorLangId =~ /^(typescript|typescriptreact|javascript|javascriptreact)$/"
+                },
+                {
+                    "command": "queryguard.simulate",
+                    "when": "queryguard.connected && editorLangId =~ /^(typescript|typescriptreact|javascript|javascriptreact)$/"
+                }
+            ],
+            "editor/context": [
+                {
+                    "command": "queryguard.showImpactPanel",
+                    "when": "editorLangId =~ /^(typescript|typescriptreact|javascript|javascriptreact)$/",
+                    "group": "queryguard@1"
+                },
+                {
+                    "command": "queryguard.simulate",
+                    "when": "queryguard.connected && editorLangId =~ /^(typescript|typescriptreact|javascript|javascriptreact)$/",
+                    "group": "queryguard@2"
+                }
+            ]
+        },
         "configuration": {
             "title": "QueryGuard",
             "properties": {
                 "queryguard.enabled": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Enable/Disable QueryGuard analysis."
+                    "order": 0,
+                    "description": "Enable QueryGuard analysis (CodeLens and diagnostics)."
                 },
                 "queryguard.showCodeLens": {
                     "type": "boolean",
                     "default": true,
-                    "description": "Show inline code lens impact estimations."
+                    "order": 1,
+                    "description": "Show impact CodeLenses above database mutations."
+                },
+                "queryguard.diagnosticSeverity": {
+                    "type": "string",
+                    "enum": [
+                        "error",
+                        "warning",
+                        "information",
+                        "hint",
+                        "none"
+                    ],
+                    "default": "warning",
+                    "order": 2,
+                    "markdownDescription": "Severity of the problems reported for `DESTRUCTIVE` and `CRITICAL` mutations. Use `none` to only show CodeLenses."
+                },
+                "queryguard.criticalRowThreshold": {
+                    "type": "integer",
+                    "default": 10000,
+                    "minimum": 1,
+                    "order": 3,
+                    "markdownDescription": "Total affected rows (including cascades) above which a mutation is classified as `CRITICAL`."
+                },
+                "queryguard.exclude": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "**/node_modules/**"
+                    ],
+                    "order": 4,
+                    "markdownDescription": "Glob patterns of files that are not analysed, e.g. `**/*.test.ts` or `**/seed.ts`. A single mutation can be silenced with a `// queryguard-ignore` comment on the line above."
+                },
+                "queryguard.prismaClientNames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "prisma",
+                        "db",
+                        "tx",
+                        "client",
+                        "prismaClient",
+                        "database"
+                    ],
+                    "order": 5,
+                    "markdownDescription": "Variable / property names that hold a Prisma Client (`prisma.user.deleteMany()`, `this.prisma…`, `tx…`)."
+                },
+                "queryguard.drizzleClientNames": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "default": [
+                        "db",
+                        "tx",
+                        "database",
+                        "orm",
+                        "client",
+                        "drizzle"
+                    ],
+                    "order": 6,
+                    "markdownDescription": "Variable / property names that hold a Drizzle database (`db.delete(users)`)."
+                },
+                "queryguard.autoConnect": {
+                    "type": "boolean",
+                    "default": true,
+                    "order": 10,
+                    "description": "Reconnect to the database last used in this workspace when VS Code starts."
                 },
                 "queryguard.sslMode": {
                     "type": "string",
-                    "default": "auto",
-                    "description": "SSL/TLS mode for database connections: auto (default), disable, require, verify-ca, verify-full.",
                     "enum": [
                         "auto",
                         "disable",
                         "require",
                         "verify-ca",
                         "verify-full"
-                    ]
+                    ],
+                    "enumDescriptions": [
+                        "Use `sslmode` from the connection URL; otherwise no TLS for localhost and `require` for remote hosts.",
+                        "Never use TLS.",
+                        "Encrypt the connection without verifying the certificate (libpq `require`).",
+                        "Verify the certificate chain, not the host name.",
+                        "Verify the certificate chain and the host name."
+                    ],
+                    "default": "auto",
+                    "scope": "machine",
+                    "order": 11,
+                    "markdownDescription": "TLS mode for database connections. Set per machine (cannot be overridden by workspace settings)."
                 },
-                "queryguard.analysisDebounce": {
+                "queryguard.sslRootCertPath": {
+                    "type": "string",
+                    "default": "",
+                    "scope": "machine",
+                    "order": 12,
+                    "markdownDescription": "Path to a PEM CA bundle used to verify the server certificate (e.g. the CA file from Supabase or AWS RDS)."
+                },
+                "queryguard.simulationTimeout": {
                     "type": "integer",
-                    "default": 750,
-                    "minimum": 100,
-                    "maximum": 10000,
-                    "description": "Delay in milliseconds before re-analyzing code after changes. Range: 100–10000ms. Default: 750."
+                    "default": 15,
+                    "minimum": 1,
+                    "maximum": 120,
+                    "order": 13,
+                    "description": "Server-side timeout, in seconds, for each count query of a simulation. The whole simulation is limited to 4× this value. Set per machine.",
+                    "scope": "machine"
                 },
                 "queryguard.cacheTTL": {
                     "type": "integer",
                     "default": 300,
-                    "minimum": 30,
+                    "minimum": 0,
                     "maximum": 86400,
-                    "description": "Schema cache time-to-live in seconds. Range: 30–86400s (1 day max). Default: 300."
+                    "order": 14,
+                    "description": "Refresh the database schema and statistics every N seconds while connected (0 = only on demand)."
+                },
+                "queryguard.analysisDebounce": {
+                    "type": "integer",
+                    "default": 500,
+                    "minimum": 100,
+                    "maximum": 10000,
+                    "order": 15,
+                    "description": "Delay in milliseconds before re-analysing a document after an edit."
                 }
             }
-        },
-        "commands": [
-            {
-                "command": "queryguard.connect",
-                "title": "QueryGuard: Connect to Database",
-                "icon": "$(database)"
-            },
-            {
-                "command": "queryguard.disconnect",
-                "title": "QueryGuard: Disconnect",
-                "icon": "$(debug-disconnect)"
-            },
-            {
-                "command": "queryguard.refreshSchema",
-                "title": "QueryGuard: Refresh Schema",
-                "icon": "$(refresh)"
-            },
-            {
-                "command": "queryguard.showImpactPanel",
-                "title": "QueryGuard: Show Impact Analysis",
-                "icon": "$(graph)"
-            },
-            {
-                "command": "queryguard.simulate",
-                "title": "QueryGuard: Run Safe Simulation",
-                "icon": "$(zap)"
-            },
-            {
-                "command": "queryguard.showLogs",
-                "title": "QueryGuard: Show Logs",
-                "icon": "$(output)"
-            }
-        ],
-        "keybindings": [
-            {
-                "command": "queryguard.connect",
-                "key": "ctrl+shift+d c",
-                "mac": "cmd+shift+d c",
-                "when": "editorTextFocus"
-            },
-            {
-                "command": "queryguard.simulate",
-                "key": "ctrl+shift+d s",
-                "mac": "cmd+shift+d s",
-                "when": "editorTextFocus"
-            },
-            {
-                "command": "queryguard.refreshSchema",
-                "key": "ctrl+shift+d r",
-                "mac": "cmd+shift+d r",
-                "when": "editorTextFocus"
-            },
-            {
-                "command": "queryguard.showLogs",
-                "key": "ctrl+shift+d l",
-                "mac": "cmd+shift+d l",
-                "when": "editorTextFocus"
-            }
-        ]
+        }
     },
     "scripts": {
-        "vscode:prepublish": "node ./esbuild.js --production && cd webview-ui && npm run build",
-        "compile": "tsc --noEmit && node ./esbuild.js",
-        "watch": "tsc --noEmit --watch && node ./esbuild.js",
-        "typecheck": "tsc --noEmit",
-        "test": "tsc -p tsconfig.test.json && mocha --timeout 5000 out/test/unit/setup.js out/test/unit/**/*.test.js",
-        "test:coverage": "tsc -p tsconfig.test.json && c8 --reporter=text --reporter=lcov mocha --timeout 5000 out/test/unit/setup.js out/test/unit/**/*.test.js",
+        "vscode:prepublish": "npm run build:prod",
+        "build": "npm run typecheck && node esbuild.js && npm run build:webview",
+        "build:prod": "npm run typecheck && node esbuild.js --production && npm run build:webview",
+        "build:webview": "vite build --config webview-ui/vite.config.mts --logLevel warn",
+        "watch": "node esbuild.js --watch",
+        "typecheck": "tsc -p tsconfig.json && tsc -p webview-ui/tsconfig.json",
         "lint": "eslint .",
         "format": "prettier --write .",
-        "package": "vsce package"
+        "format:check": "prettier --check .",
+        "pretest": "tsc -p tsconfig.test.json",
+        "test": "mocha",
+        "test:integration": "npm run pretest && mocha --config .mocharc.integration.json",
+        "test:coverage": "npm run pretest && c8 mocha",
+        "package": "vsce package --no-dependencies",
+        "check": "npm run lint && npm run typecheck && npm test && npm run package",
+        "test:e2e": "npm run pretest && node out/test-build/test/e2e/runTest.js"
     },
     "dependencies": {
-        "pg": "^8.11.3",
-        "pg-pool": "^3.6.1"
+        "pg": "^8.16.3"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
         "@types/mocha": "^10.0.10",
-        "@types/node": "20.x",
-        "@types/pg": "^8.20.0",
-        "@types/vscode": "^1.85.0",
-        "c8": "^11.0.0",
-        "esbuild": "^0.28.0",
-        "eslint": "^10.2.0",
-        "globals": "^17.5.0",
-        "mocha": "^11.7.5",
-        "module-alias": "^2.3.4",
-        "prettier": "^3.8.3",
-        "ts-node": "^10.9.2",
+        "@types/node": "^20.19.0",
+        "@types/pg": "^8.23.1",
+        "@types/react": "^19.3.0",
+        "@types/react-dom": "^19.3.0",
+        "@types/vscode": "1.85.0",
+        "@vitejs/plugin-react": "^6.1.2",
+        "@vscode/test-electron": "^3.1.0",
+        "@vscode/vsce": "^4.1.0",
+        "c8": "^12.0.0",
+        "esbuild": "^0.28.2",
+        "eslint": "^10.14.0",
+        "eslint-plugin-react-hooks": "^7.1.1",
+        "globals": "^17.13.0",
+        "lucide-react": "^1.66.0",
+        "mocha": "^12.0.3",
+        "prettier": "^3.9.10",
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1",
         "typescript": "^6.0.3",
-        "typescript-eslint": "^8.58.2"
-    },
-    "overrides": {
-        "diff": "^9.0.0",
-        "serialize-javascript": "^7.0.5"
+        "typescript-eslint": "^8.72.1",
+        "vite": "^8.3.5"
     }
 }

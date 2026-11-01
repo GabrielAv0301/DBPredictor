@@ -1,0 +1,612 @@
+/* QueryGuard webview — every color comes from the active VS Code theme. */
+
+:root {
+    --qg-gap: 12px;
+    --qg-radius: 6px;
+    --qg-border: var(--vscode-widget-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+    --qg-card: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+    --qg-muted: var(--vscode-descriptionForeground);
+    --qg-danger: var(--vscode-errorForeground);
+    --qg-warn: var(--vscode-editorWarning-foreground);
+    --qg-ok: var(--vscode-testing-iconPassed, var(--vscode-charts-green));
+    --qg-info: var(--vscode-editorInfo-foreground, var(--vscode-charts-blue));
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    line-height: 1.45;
+}
+
+.app {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 12px 20px 24px;
+}
+
+h1,
+h2 {
+    margin: 0;
+    font-weight: 600;
+}
+
+h1 {
+    font-size: 1.35em;
+    word-break: break-all;
+}
+
+h2 {
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--qg-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+code,
+.mono {
+    font-family: var(--vscode-editor-font-family);
+}
+
+code {
+    background: var(--vscode-textCodeBlock-background);
+    padding: 0 4px;
+    border-radius: 3px;
+}
+
+.muted {
+    color: var(--qg-muted);
+}
+
+.small {
+    font-size: 0.85em;
+}
+
+.danger-text {
+    color: var(--qg-danger);
+    font-weight: 600;
+}
+
+.warn-text {
+    color: var(--qg-warn);
+}
+
+.spacer {
+    flex: 1;
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--qg-gap);
+}
+
+/* ---- Tabs ---------------------------------------------------------------- */
+
+.tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-bottom: 1px solid var(--qg-border);
+    margin-bottom: 16px;
+}
+
+.tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--qg-muted);
+    cursor: pointer;
+    font: inherit;
+}
+
+.tab:hover {
+    color: var(--vscode-foreground);
+}
+
+.tab.active {
+    color: var(--vscode-foreground);
+    border-bottom-color: var(--vscode-focusBorder);
+}
+
+.connection {
+    font-size: 0.85em;
+}
+
+.connection.on {
+    color: var(--qg-ok);
+}
+
+.connection.off {
+    color: var(--qg-muted);
+}
+
+/* ---- Buttons ------------------------------------------------------------- */
+
+.button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border: 1px solid var(--vscode-button-border, transparent);
+    border-radius: 2px;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.button:hover:not(:disabled) {
+    background: var(--vscode-button-hoverBackground);
+}
+
+.button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.button.secondary {
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+}
+
+.button.secondary:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+
+.button.danger {
+    background: transparent;
+    color: var(--qg-danger);
+    border-color: var(--qg-danger);
+}
+
+.link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--vscode-textLink-foreground);
+    cursor: pointer;
+    font: inherit;
+}
+
+.link:hover {
+    color: var(--vscode-textLink-activeForeground);
+    text-decoration: underline;
+}
+
+button:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+/* ---- Summary ------------------------------------------------------------- */
+
+.summary {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.summary-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.summary-meta {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    color: var(--qg-muted);
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: 1px solid currentColor;
+}
+
+.risk-destructive {
+    color: var(--vscode-editor-background);
+    background: var(--qg-danger);
+    border-color: var(--qg-danger);
+}
+
+.risk-critical {
+    color: var(--qg-danger);
+}
+
+.risk-warning {
+    color: var(--qg-warn);
+}
+
+.risk-safe {
+    color: var(--qg-ok);
+}
+
+.risk-unknown {
+    color: var(--qg-muted);
+}
+
+/* ---- Callouts ------------------------------------------------------------ */
+
+.callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: var(--qg-radius);
+    border-left: 3px solid var(--qg-info);
+    background: var(--vscode-textBlockQuote-background);
+}
+
+.callout > svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.callout .button {
+    margin-left: auto;
+}
+
+.callout.danger {
+    border-left-color: var(--qg-danger);
+}
+
+.callout.ok {
+    border-left-color: var(--qg-ok);
+}
+
+.reasons {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.reasons li {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.reasons svg {
+    flex-shrink: 0;
+    margin-top: 3px;
+    color: var(--qg-info);
+}
+
+/* ---- Cards --------------------------------------------------------------- */
+
+.card {
+    background: var(--qg-card);
+    border: 1px solid var(--qg-border);
+    border-radius: var(--qg-radius);
+    padding: 12px 14px;
+}
+
+.card p {
+    margin: 4px 0;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.card-header h2 {
+    margin: 0;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: minmax(140px, 180px) 1fr;
+    gap: var(--qg-gap);
+}
+
+@media (max-width: 520px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.stat-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.stats dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 16px;
+    margin: 0;
+}
+
+.stats dt {
+    color: var(--qg-muted);
+}
+
+.stats dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.stats small {
+    margin-left: 8px;
+    font-weight: normal;
+    color: var(--qg-muted);
+}
+
+/* ---- Meter --------------------------------------------------------------- */
+
+.meter {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    margin: 0;
+}
+
+.meter svg {
+    width: 100%;
+    height: 100%;
+}
+
+.meter-track {
+    fill: none;
+    stroke: var(--qg-border);
+    stroke-width: 8;
+}
+
+.meter-value {
+    fill: none;
+    stroke-width: 8;
+    stroke-linecap: round;
+}
+
+.meter-value.ok {
+    stroke: var(--qg-ok);
+}
+
+.meter-value.warn {
+    stroke: var(--qg-warn);
+}
+
+.meter-value.danger {
+    stroke: var(--qg-danger);
+}
+
+.meter figcaption {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.meter figcaption strong {
+    font-size: 1.3em;
+}
+
+.meter figcaption span {
+    font-size: 0.75em;
+    color: var(--qg-muted);
+}
+
+/* ---- Chips, tree, tables ------------------------------------------------- */
+
+.chips {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chip {
+    padding: 2px 8px;
+    border-radius: 3px;
+    background: var(--vscode-textCodeBlock-background);
+}
+
+.tree {
+    list-style: none;
+    margin: 0;
+    padding-left: 0;
+}
+
+.tree .tree {
+    padding-left: 18px;
+    border-left: 1px solid var(--qg-border);
+    margin-left: 6px;
+}
+
+.tree-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    flex-wrap: wrap;
+}
+
+.rule {
+    font-size: 0.72em;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+}
+
+.rule-cascade {
+    color: var(--qg-danger);
+}
+
+.rule-setnull {
+    color: var(--qg-warn);
+}
+
+.rule-restrict {
+    color: var(--qg-info);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0;
+    font-size: 0.9em;
+}
+
+.table th,
+.table td {
+    text-align: left;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--qg-border);
+}
+
+.table th {
+    color: var(--qg-muted);
+    font-weight: 600;
+}
+
+.table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.indent {
+    display: inline-block;
+}
+
+.indent[data-depth='1'] {
+    width: 12px;
+}
+.indent[data-depth='2'] {
+    width: 24px;
+}
+.indent[data-depth='3'] {
+    width: 36px;
+}
+.indent[data-depth='4'] {
+    width: 48px;
+}
+.indent[data-depth='5'] {
+    width: 60px;
+}
+.indent[data-depth='6'] {
+    width: 72px;
+}
+
+.warnings {
+    margin: 6px 0;
+    padding-left: 18px;
+    color: var(--qg-warn);
+    font-size: 0.9em;
+}
+
+.code {
+    margin: 0;
+    padding: 8px 10px;
+    overflow-x: auto;
+    background: var(--vscode-textCodeBlock-background);
+    border-radius: 4px;
+    font-family: var(--vscode-editor-font-family);
+    font-size: var(--vscode-editor-font-size);
+    white-space: pre;
+}
+
+/* ---- History -------------------------------------------------------------- */
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.history {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.history-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ---- Misc ------------------------------------------------------------------ */
+
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 64px 16px;
+    text-align: center;
+    color: var(--qg-muted);
+}
+
+footer {
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px solid var(--qg-border);
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .spin {
+        animation: none;
+    }
+}

@@ -1,335 +1,145 @@
-import * as vscode from 'vscode';
 import * as path from 'path';
+import * as vscode from 'vscode';
+import { SUPPORTED_LANGUAGES } from './core/detectors';
+import { ConnectionManager } from './db/ConnectionManager';
+import { QueryGuard } from './QueryGuard';
+import { AnalysisService } from './services/AnalysisService';
+import { HistoryStore } from './services/HistoryStore';
+import { ProfileStore } from './services/ProfileStore';
+import { ProjectIndexService } from './services/ProjectIndexService';
+import { SchemaService } from './services/SchemaService';
+import { SECTION, Settings } from './services/settings';
+import { SimulationService } from './services/SimulationService';
+import { ImpactCodeLensProvider } from './ui/CodeLensProvider';
+import { DiagnosticsProvider } from './ui/DiagnosticsProvider';
+import { ImpactPanel } from './ui/ImpactPanel';
+import { StatusBar } from './ui/StatusBar';
+import { KeyedDebouncer } from './utils/debounce';
 import { Logger } from './utils/logger';
-import { SecretsManager } from './config/SecretsManager';
-import { ConnectionManager } from './core/db/ConnectionManager';
-import { SchemaCache } from './core/db/SchemaCache';
-import { StatusBarProvider } from './providers/StatusBarProvider';
-import { PrismaDetector } from './core/detectors/PrismaDetector';
-import { SupabaseDetector } from './core/detectors/SupabaseDetector';
-import { DrizzleDetector } from './core/detectors/DrizzleDetector';
-import { debounce } from './utils/debounce';
-import { CodeLensProvider } from './providers/CodeLensProvider';
-import { HistoryManager } from './core/impact/HistoryManager';
-import { ImpactPanelManager } from './webview/ImpactPanelManager';
-import { SimulationRunner } from './core/db/SimulationRunner';
-import { ImpactResult } from './core/impact/types';
-import { ConnectionProfileManager } from './config/ConnectionProfile';
-import { DiagnosticProvider } from './providers/DiagnosticProvider';
 
-export async function activate(context: vscode.ExtensionContext) {
-    Logger.init();
-    Logger.info('QueryGuard is now active.');
+let connection: ConnectionManager | undefined;
 
-    // Base services
-    SecretsManager.init(context);
-    const connManager = ConnectionManager.getInstance();
+export function activate(context: vscode.ExtensionContext): void {
+    const channel = vscode.window.createOutputChannel('QueryGuard', { log: true });
+    context.subscriptions.push(channel);
+    Logger.setSink(channel);
+    Logger.info(`QueryGuard ${context.extension.packageJSON.version as string} activated.`);
 
-    // Inject absolute worker path to avoid module resolution errors
-    const workerPath = path.join(context.extensionPath, 'out', 'workers', 'db.worker.js');
-    connManager.setWorkerPath(workerPath);
+    // ---- Services ------------------------------------------------------------
+    connection = new ConnectionManager(path.join(context.extensionPath, 'out', 'db.worker.js'));
+    const schema = new SchemaService(connection, () => Settings.schemaRefreshSeconds);
+    const project = new ProjectIndexService();
+    const analysis = new AnalysisService(schema, project);
+    const profiles = new ProfileStore(context.globalState, context.workspaceState, context.secrets);
+    const history = new HistoryStore(context.workspaceState);
+    const simulation = new SimulationService(connection, schema, project);
+    const statusBar = new StatusBar();
+    const codeLens = new ImpactCodeLensProvider(analysis);
+    const diagnostics = new DiagnosticsProvider(analysis);
+    const controller = new QueryGuard({
+        extensionUri: context.extensionUri,
+        connection,
+        schema,
+        analysis,
+        profiles,
+        history,
+        simulation,
+        showLogs: () => channel.show(),
+    });
 
-    const schemaCache = SchemaCache.getInstance();
-    const statusBar = StatusBarProvider.init();
-    const prismaDetector = new PrismaDetector();
-    const supabaseDetector = new SupabaseDetector();
-    const drizzleDetector = new DrizzleDetector();
-    const codeLensProvider = new CodeLensProvider();
-    const historyManager = new HistoryManager(context);
-    const diagnosticProvider = new DiagnosticProvider();
+    const selector: vscode.DocumentSelector = SUPPORTED_LANGUAGES.flatMap((language) => [
+        { language, scheme: 'file' },
+        { language, scheme: 'untitled' },
+    ]);
+    const debouncer = new KeyedDebouncer<vscode.TextDocument>(
+        () => Settings.analysisDebounceMs,
+        (document) => analysis.analyze(document)
+    );
+    const conn = connection;
 
-    // Register CodeLens providers
     context.subscriptions.push(
-        vscode.languages.registerCodeLensProvider(
-            [
-                { language: 'typescript', scheme: 'file' },
-                { language: 'typescriptreact', scheme: 'file' },
-                { language: 'javascript', scheme: 'file' },
-                { language: 'javascriptreact', scheme: 'file' },
-            ],
-            codeLensProvider
-        ),
+        connection,
+        schema,
+        project,
+        analysis,
+        statusBar,
+        codeLens,
+        diagnostics,
+        { dispose: () => debouncer.dispose() },
+        { dispose: () => ImpactPanel.instance?.dispose() },
+        ...controller.register(),
+        vscode.languages.registerCodeLensProvider(selector, codeLens),
         vscode.languages.registerCodeActionsProvider(
-            [
-                { language: 'typescript', scheme: 'file' },
-                { language: 'typescriptreact', scheme: 'file' },
-                { language: 'javascript', scheme: 'file' },
-                { language: 'javascriptreact', scheme: 'file' },
-            ],
-            diagnosticProvider
-        )
-    );
+            selector,
+            diagnostics,
+            DiagnosticsProvider.metadata
+        ),
 
-    // Listen for configuration changes to refresh CodeLenses and Diagnostics
-    context.subscriptions.push(
-        vscode.workspace.onDidChangeConfiguration((e) => {
-            if (
-                e.affectsConfiguration('queryguard.showCodeLens') ||
-                e.affectsConfiguration('queryguard.enabled')
-            ) {
-                diagnosticProvider.clear();
-                // Force re-analysis to update CodeLenses and Diagnostics
-                if (vscode.window.activeTextEditor) {
-                    analyzeDocument(vscode.window.activeTextEditor.document);
-                }
-            }
-        })
-    );
-
-    // Schema and cache updates
-    connManager.setOnSchemaUpdate((data) => {
-        schemaCache.update(data);
-        statusBar.update();
-        if (vscode.window.activeTextEditor) {
-            analyzeDocument(vscode.window.activeTextEditor.document);
-        }
-    });
-
-    // Connection error handling
-    connManager.setOnError((error) => {
-        statusBar.update();
-        vscode.window.showErrorMessage(`QueryGuard: Database connection error. ${error}`);
-    });
-
-    connManager.setOnConnectionStatusChange((isConnected) => {
-        ImpactPanelManager.currentPanel?.sendConnectionStatus(isConnected);
-    });
-
-    // AST Document Analysis
-    const analyzeDocument = (document: vscode.TextDocument) => {
-        const supportedLanguages = [
-            'typescript',
-            'typescriptreact',
-            'javascript',
-            'javascriptreact',
-        ];
-        if (!supportedLanguages.includes(document.languageId)) return;
-
-        const config = vscode.workspace.getConfiguration('queryguard');
-        if (!config.get<boolean>('enabled', true)) return;
-
-        try {
-            const prismaMutations = prismaDetector.detect(document);
-            const supabaseMutations = supabaseDetector.detect(document);
-            const drizzleMutations = drizzleDetector.detect(document);
-
-            const allMutations = [...prismaMutations, ...supabaseMutations, ...drizzleMutations];
-
-            if (allMutations.length > 0) {
-                Logger.info(`Detected ${allMutations.length} mutations`, {
-                    prisma: prismaMutations.length,
-                    supabase: supabaseMutations.length,
-                    drizzle: drizzleMutations.length,
-                });
-            }
-
-            codeLensProvider.setMutations(document.uri.toString(), allMutations);
-            diagnosticProvider.update(document);
-        } catch (error) {
-            Logger.error('AST Detection failed', error);
-        }
-    };
-
-    // Adjust debounce based on config (default 750ms)
-    const config = vscode.workspace.getConfiguration('queryguard');
-    const debounceMs = config.get<number>('analysisDebounce', 750);
-
-    const debouncedAnalyze = debounce((document: vscode.TextDocument) => {
-        analyzeDocument(document);
-    }, debounceMs);
-
-    // Listen for file changes
-    context.subscriptions.push(
+        // ---- Document lifecycle ---------------------------------------------
+        vscode.workspace.onDidOpenTextDocument((document) => analysis.analyze(document)),
         vscode.workspace.onDidChangeTextDocument((event) => {
-            debouncedAnalyze(event.document);
+            if (event.contentChanges.length === 0) return;
+            if (event.document.languageId === 'prisma') project.indexDocument(event.document);
+            else debouncer.schedule(event.document.uri.toString(), event.document);
         }),
-        vscode.window.onDidChangeActiveTextEditor((editor) => {
-            if (editor) analyzeDocument(editor.document);
+        vscode.workspace.onDidCloseTextDocument((document) => {
+            debouncer.cancel(document.uri.toString());
+            analysis.forget(document.uri);
+            diagnostics.clear(document);
+        }),
+        vscode.workspace.onDidChangeConfiguration((event) => {
+            if (!event.affectsConfiguration(SECTION)) return;
+            if (event.affectsConfiguration(`${SECTION}.cacheTTL`)) schema.schedule();
+            analysis.reanalyzeAll();
+            codeLens.refresh();
+        }),
+
+        // ---- Cross-service wiring -------------------------------------------
+        conn.onDidChangeState((state) => {
+            statusBar.render(state, schema.index);
+            void vscode.commands.executeCommand(
+                'setContext',
+                'queryguard.connected',
+                state.status === 'connected'
+            );
+            ImpactPanel.instance?.connectionChanged();
+        }),
+        schema.onDidChange((index) => {
+            statusBar.render(conn.state, index);
+            analysis.reanalyzeAll();
+        }),
+        project.onDidChange(() => analysis.reanalyzeAll()),
+        analysis.onDidChange(() => refreshPanel(analysis))
+    );
+
+    void vscode.commands.executeCommand('setContext', 'queryguard.connected', false);
+    project.start();
+    vscode.workspace.textDocuments.forEach((document) => analysis.analyze(document));
+
+    // Migrate 1.x data, then reconnect in the background (never block activation).
+    void profiles
+        .migrateLegacy()
+        .then((migrated) => {
+            if (migrated > 0) {
+                Logger.info(`Migrated ${migrated} connection profile(s) to secure storage.`);
+            }
         })
-    );
+        .catch((error) => Logger.error('Profile migration failed', error))
+        .then(() => controller.autoConnect())
+        .catch((error) => Logger.error('Auto-connect failed', error));
+}
 
-    // Initial analysis on startup
-    if (vscode.window.activeTextEditor) {
-        analyzeDocument(vscode.window.activeTextEditor.document);
-    }
-
-    // Auto-connect if connection string is stored
-    const storedConnStr = await SecretsManager.getInstance().getConnectionString();
-    if (storedConnStr) {
-        Logger.info('Stored connection string found, auto-connecting...');
-        await connManager.connect(storedConnStr);
-        statusBar.update();
-    }
-
-    // --- Extension Commands ---
-
-    const connectCmd = vscode.commands.registerCommand('queryguard.connect', async () => {
-        const profiles = await ConnectionProfileManager.list(context);
-        const choices = ['New connection...'];
-        profiles.forEach((p) => choices.push(`Switch to: ${p.name}`));
-        if (profiles.length > 0) {
-            choices.push('Delete a profile...');
-        }
-
-        const selected = await vscode.window.showQuickPick(choices, {
-            placeHolder: 'QueryGuard: Connect to database',
-        });
-
-        if (!selected) return;
-
-        if (selected === 'New connection...') {
-            const connectionString = await vscode.window.showInputBox({
-                prompt: 'Enter your database connection string',
-                placeHolder: 'postgresql://user:password@host:port/database',
-                password: true,
-                ignoreFocusOut: true,
-            });
-
-            if (connectionString) {
-                const name = await vscode.window.showInputBox({
-                    prompt: 'Enter a name for this connection profile',
-                    placeHolder: 'e.g., Production, Staging, Local',
-                    ignoreFocusOut: true,
-                });
-
-                if (name) {
-                    await ConnectionProfileManager.save(context, {
-                        name,
-                        connectionString,
-                        sslMode: 'auto',
-                        createdAt: Date.now(),
-                    });
-                }
-
-                try {
-                    await SecretsManager.getInstance().saveConnectionString(connectionString);
-                    const result = await connManager.connect(connectionString);
-                    if (result.success) {
-                        vscode.window.showInformationMessage(
-                            `QueryGuard: Connected to ${name || 'database'}.`
-                        );
-                        if (vscode.window.activeTextEditor) {
-                            analyzeDocument(vscode.window.activeTextEditor.document);
-                        }
-                    } else {
-                        vscode.window.showErrorMessage(
-                            `QueryGuard: Connection failed. ${result.error || 'Check logs for details.'}`
-                        );
-                    }
-                    statusBar.update();
-                } catch (error) {
-                    Logger.error('Failed to save connection string or connect', error);
-                }
-            }
-        } else if (selected.startsWith('Switch to: ')) {
-            const profileName = selected.replace('Switch to: ', '');
-            const profile = profiles.find((p) => p.name === profileName);
-            if (profile) {
-                await SecretsManager.getInstance().saveConnectionString(profile.connectionString);
-                const result = await connManager.connect(profile.connectionString);
-                if (result.success) {
-                    vscode.window.showInformationMessage(`QueryGuard: Connected to '${profileName}'.`);
-                    statusBar.update();
-                    if (vscode.window.activeTextEditor) {
-                        analyzeDocument(vscode.window.activeTextEditor.document);
-                    }
-                } else {
-                    vscode.window.showErrorMessage(
-                        `QueryGuard: Connection to '${profileName}' failed. ${result.error}`
-                    );
-                }
-            }
-        } else if (selected === 'Delete a profile...') {
-            const toDelete = await vscode.window.showQuickPick(
-                profiles.map((p) => p.name),
-                { placeHolder: 'Select a profile to delete' }
-            );
-            if (toDelete) {
-                await ConnectionProfileManager.delete(context, toDelete);
-                vscode.window.showInformationMessage(`QueryGuard: Profile '${toDelete}' deleted.`);
-            }
-        }
-    });
-
-    const disconnectCmd = vscode.commands.registerCommand('queryguard.disconnect', async () => {
-        await SecretsManager.getInstance().deleteConnectionString();
-        await connManager.disconnect();
-        schemaCache.clear();
-        statusBar.update();
-        vscode.window.showInformationMessage('QueryGuard: Disconnected.');
-    });
-
-    const refreshSchemaCmd = vscode.commands.registerCommand('queryguard.refreshSchema', () => {
-        if (connManager.getIsConnected()) {
-            connManager.querySchema();
-            vscode.window.showInformationMessage('QueryGuard: Refreshing schema...');
-        } else {
-            vscode.window.showErrorMessage('QueryGuard: Not connected to database.');
-        }
-    });
-
-    const showImpactPanelCmd = vscode.commands.registerCommand(
-        'queryguard.showImpactPanel',
-        (impact) => {
-            if (vscode.window.activeTextEditor) {
-                historyManager.save(impact, vscode.window.activeTextEditor.document);
-            }
-            ImpactPanelManager.createOrShow(context.extensionUri, impact, historyManager);
-        }
-    );
-
-    const simulateCmd = vscode.commands.registerCommand(
-        'queryguard.simulate',
-        async (impact: ImpactResult | undefined) => {
-            if (!impact) {
-                vscode.window.showWarningMessage(
-                    'QueryGuard: No mutation selected. Click a Code Lens on a database mutation to simulate it.'
-                );
-                return;
-            }
-
-            vscode.window.withProgress(
-                {
-                    location: vscode.ProgressLocation.Notification,
-                    title: 'Running safe simulation...',
-                    cancellable: false,
-                },
-                async () => {
-                    const result = await SimulationRunner.simulate(impact);
-                    if (result.error) {
-                        vscode.window.showErrorMessage(`Simulation failed: ${result.error}`);
-                    } else {
-                        const baseMsg = `Simulation complete: ${result.rowCount} rows affected. No data was modified.`;
-                        const fullMsg = result.warnCascade
-                            ? `${baseMsg} (${result.warnCascade})`
-                            : baseMsg;
-                        vscode.window.showInformationMessage(fullMsg);
-                        ImpactPanelManager.currentPanel?.updateSimulationResult(
-                            result.rowCount,
-                            result.warnCascade
-                        );
-                    }
-                }
-            );
-        }
-    );
-
-    const showLogsCmd = vscode.commands.registerCommand('queryguard.showLogs', () => {
-        Logger.show();
-    });
-
-    context.subscriptions.push(
-        connectCmd,
-        disconnectCmd,
-        refreshSchemaCmd,
-        showImpactPanelCmd,
-        simulateCmd,
-        showLogsCmd,
-        { dispose: () => statusBar.dispose() }
-    );
+/** Keeps an open panel in sync while the user edits the mutation it shows. */
+function refreshPanel(analysis: AnalysisService): void {
+    const panel = ImpactPanel.instance;
+    if (!panel) return;
+    panel.refresh((target) => analysis.find(target.uri, target.key)?.summary);
 }
 
 export async function deactivate(): Promise<void> {
-    await ConnectionManager.getInstance().disconnect();
-    Logger.info('QueryGuard is now deactivated.');
+    if (connection) {
+        await connection.disconnect().catch(() => undefined);
+        connection = undefined;
+    }
+    Logger.setSink(undefined);
 }
